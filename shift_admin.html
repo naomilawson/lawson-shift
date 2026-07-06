@@ -144,7 +144,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.18</h1>
+    <h1>シフト管理（管理者用） ver1.19</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -775,6 +775,32 @@ function addNewSlot(weekIdx){
   saveDraftToFirestore(weekIdx);
 }
 
+// ガントの空白部分クリックで新規勤務枠を追加（曜日・店舗はクリック位置から自動判定、時間帯はクリックX座標から推測）
+function onTrackClick(ev, weekIdx, sub, di){
+  if(ev.target !== ev.currentTarget) return; // バー自体のクリックはstopPropagationで届かないが念のためのガード
+  if(!getBoard(weekIdx)){ alert('先に下書きを作成してください'); return; }
+  var gST = sub==='hospital'?7:6, gEN = sub==='hospital'?20:23;
+  var rect = ev.currentTarget.getBoundingClientRect();
+  var ratio = (ev.clientX - rect.left) / rect.width;
+  var guessIn = Math.round(gST + ratio*(gEN-gST));
+  guessIn = Math.max(gST, Math.min(gEN-2, guessIn));
+  var guessOut = Math.min(gEN-1, guessIn+5);
+  addNewSlotAt(weekIdx, sub, di, guessIn, guessOut);
+}
+function addNewSlotAt(weekIdx, sub, di, guessIn, guessOut){
+  var gST = sub==='hospital'?7:6, gEN = sub==='hospital'?20:23;
+  var timeInput = prompt('時間帯を入力（例: '+guessIn+'-'+guessOut+' → '+guessIn+'時台〜'+(guessOut-1)+'時台）', guessIn+'-'+guessOut);
+  if(timeInput===null) return;
+  var m = timeInput.trim().match(/^(\d+)[-~～](\d+)$/);
+  if(!m){ alert('入力形式が正しくありません（例: 10-15）'); return; }
+  var inH = Number(m[1]), outH = Number(m[2]);
+  if(inH<gST || outH>=gEN || outH<=inH){ alert('営業時間（'+gST+'〜'+gEN+'時）の範囲内で入力してください'); return; }
+  pushHistory();
+  getBoard(weekIdx)[sub][di].staff.push({n:null, in:inH, out:outH+1, unassigned:true});
+  renderAll();
+  saveDraftToFirestore(weekIdx);
+}
+
 function moveToOtherStore(weekIdx, sub, day, idx){
   closePopover();
   pushHistory();
@@ -1072,6 +1098,7 @@ function computeWeeklyHours(weekIdx){
 }
 
 function renderGanttHtml(weekIdx, sub){
+  var wkArg = (typeof weekIdx === 'string') ? ('&quot;'+weekIdx+'&quot;') : weekIdx;
   var swFn = weekIdx==='pattern' ? 'swPatternSub' : 'swSub';
   var tabsHtml = '<div class="subtabs">'
     + '<div class="stab'+(sub==='honten'?' on':'')+'" onclick="'+swFn+'(\'honten\')">本店</div>'
@@ -1107,7 +1134,7 @@ function renderGanttHtml(weekIdx, sub){
     if(rowsAll.length===0) rowsAll.push([]);
     for(var r=0;r<rowsAll.length;r++){
       var lbl = r===0 ? ('<div style="font-size:11px;font-weight:600;" class="'+wc+'">'+day.date+'</div><div style="font-size:14px;font-weight:700;" class="'+wc+'">'+day.wd+'</div>') : '';
-      html += '<div class="g-bar-row"><div class="g-row-lbl" style="flex-direction:column;'+(rowsAll.length===1?'justify-content:space-between;padding:2px 0;':'')+'">'+lbl+'</div><div class="g-track">';
+      html += '<div class="g-bar-row"><div class="g-row-lbl" style="flex-direction:column;'+(rowsAll.length===1?'justify-content:space-between;padding:2px 0;':'')+'">'+lbl+'</div><div class="g-track" style="cursor:copy;" onclick="onTrackClick(event,'+wkArg+',&quot;'+sub+'&quot;,'+di+')">';
       rowsAll[r].forEach(function(s){
         html += buildBarHtml(s, gST, sp, weekIdx, sub, di, s._idx, s._ref);
       });
