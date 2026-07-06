@@ -148,7 +148,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.26</h1>
+    <h1>シフト管理（管理者用） ver1.27</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -881,7 +881,7 @@ var popoverOutsideClickHandler = null;
 function closePopover(){
   var p=document.getElementById('name-popover');
   if(p) p.remove();
-  if(popoverOutsideClickHandler){ document.removeEventListener('click', popoverOutsideClickHandler); popoverOutsideClickHandler = null; }
+  if(popoverOutsideClickHandler){ document.removeEventListener('click', popoverOutsideClickHandler, true); popoverOutsideClickHandler = null; }
 }
 
 function adjustBarTime(weekIdx,sub,day,idx,field,delta){
@@ -1059,12 +1059,9 @@ function onBarClick(ev, weekIdx, sub, day, idx){
   pop.innerHTML = buildBarPopoverHtml(weekIdx, sub, day, idx);
   positionPopover(pop, rect);
   popoverOutsideClickHandler = function(e){
-    var r = pop.getBoundingClientRect();
-    if(e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom){
-      closePopover();
-    }
+    if(!pop.contains(e.target)) closePopover();
   };
-  setTimeout(function(){ document.addEventListener('click', popoverOutsideClickHandler); },0);
+  document.addEventListener('click', popoverOutsideClickHandler, true);
 }
 function setBreak(weekIdx,sub,day,idx){
   closePopover();
