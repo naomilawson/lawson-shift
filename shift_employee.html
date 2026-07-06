@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="color-scheme" content="light">
-<title>シフト管理 ver1.41</title>
+<title>シフト管理 ver1.43</title>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
@@ -171,9 +171,9 @@ body.dk .s-me{background:#1e1e08;}
 <body>
 <div class="app">
   <div class="hd">
-    <div class="hd-l">
+    <div class="hd-l" id="hd-debug-switch" style="cursor:pointer;">
       <div class="av" id="hd-avatar">?</div>
-      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.41</div></div>
+      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.43</div></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <button id="refresh-btn" class="gear-btn" onclick="refreshAllData()"><span id="refresh-btn-icon">⟳</span> <span id="refresh-btn-label">更新</span></button>
@@ -841,8 +841,20 @@ function applyRegularShift(){
   var saved = EMPLOYEE_REGULAR[MY_N];
   if (saved && saved.length===7) {
     REG_S = JSON.parse(JSON.stringify(saved));
-    renderReg();
+  } else {
+    REG_S = WDS.map(function(){ return {s:'ok', in:9, out:17}; }); // 保存済みパターンがない場合は全日〇にリセット
   }
+  renderReg();
+  applyRegularToUnsentWeeks();
+}
+function applyRegularToUnsentWeeks(){
+  for (var wi = 0; wi < WISH.length; wi++) {
+    if (WISH_STATUS[wi] && WISH_STATUS[wi].sent) continue; // 送信済みの週は変更しない
+    var oldMemo = MEMO[wi];
+    WISH[wi] = REG_S.map(function(r){ return {s:r.s, in:r.in||9, out:r.out||17, memo:''}; });
+    MEMO[wi] = oldMemo;
+  }
+  renderWish();
 }
 function saveRegularShift(){
   if (!MY_N) return;
@@ -851,6 +863,7 @@ function saveRegularShift(){
     EMPLOYEE_REGULAR[MY_N] = REG_S;
     showToast('通常シフトパターンを保存しました');
     document.getElementById('onboard-banner').style.display = 'none';
+    applyRegularToUnsentWeeks();
   }).catch(function(err){
     showFbError('保存に失敗しました: ' + err.message);
   }).then(function(){
@@ -1048,6 +1061,32 @@ function initApp(){
 }
 
 // 初期描画（Firestore読み込み前の仮表示）
+// ==== デバッグ用：ヘッダーの氏名をクリック/長押しで他の人に切り替え ====
+(function(){
+  var el = document.getElementById('hd-debug-switch');
+  var pressTimer = null;
+  var longPressTriggered = false;
+  var justTouched = false;
+  el.addEventListener('touchstart', function(){
+    justTouched = true;
+    longPressTriggered = false;
+    pressTimer = setTimeout(function(){
+      longPressTriggered = true;
+      if (navigator.vibrate) navigator.vibrate(30);
+      showNameSelect();
+    }, 600);
+  });
+  el.addEventListener('touchend', function(){
+    clearTimeout(pressTimer);
+    setTimeout(function(){ justTouched = false; }, 500);
+  });
+  el.addEventListener('touchmove', function(){ clearTimeout(pressTimer); });
+  el.addEventListener('click', function(){
+    if (justTouched || longPressTriggered) { longPressTriggered = false; return; }
+    showNameSelect();
+  });
+})();
+
 renderWish();
 initApp();
 </script>
