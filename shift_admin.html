@@ -144,7 +144,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.21</h1>
+    <h1>シフト管理（管理者用） ver1.22</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -1049,7 +1049,10 @@ function onBarClick(ev, weekIdx, sub, day, idx){
   pop.innerHTML = buildBarPopoverHtml(weekIdx, sub, day, idx);
   positionPopover(pop, rect);
   popoverOutsideClickHandler = function(e){
-    if(!pop.contains(e.target)) closePopover();
+    var r = pop.getBoundingClientRect();
+    if(e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom){
+      closePopover();
+    }
   };
   setTimeout(function(){ document.addEventListener('click', popoverOutsideClickHandler); },0);
 }
