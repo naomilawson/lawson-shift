@@ -148,7 +148,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.24</h1>
+    <h1>シフト管理（管理者用） ver1.25</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -1224,7 +1224,8 @@ function renderGanttHtml(weekIdx, sub){
         if(x.dual) comboList.push(Object.assign({}, x, {_idx:hIdx, _ref:true}));
       });
     }
-    var rowsAll = packRows(comboList);
+    var rowsAll = packRows(comboList.filter(function(c){ return !c._ref; }))
+      .concat(packRows(comboList.filter(function(c){ return c._ref; })));
     if(rowsAll.length===0) rowsAll.push([]);
     for(var r=0;r<rowsAll.length;r++){
       var lbl = r===0 ? ('<div style="font-size:11px;font-weight:600;" class="'+wc+'">'+day.date+'</div><div style="font-size:14px;font-weight:700;" class="'+wc+'">'+day.wd+'</div>') : '';
