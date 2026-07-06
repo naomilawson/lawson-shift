@@ -80,7 +80,7 @@ body{background:var(--bg);color:var(--t1);}
 .own-wish-row{display:flex;gap:8px;margin-top:8px;}
 .own-wish-input{flex:1;height:36px;border:1px solid var(--btn-bd);border-radius:6px;padding:0 10px;font-size:13px;background:var(--btn);color:var(--t1);}
 .mic-btn{width:36px;height:36px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;font-size:15px;}
-.popover{position:absolute;background:var(--card);border:1px solid var(--bd);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:50;min-width:140px;padding:4px;}
+.popover{position:absolute;background:var(--card);border:1px solid var(--bd);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:400;min-width:140px;padding:4px;}
 .popover div{padding:7px 10px;font-size:13px;border-radius:5px;cursor:pointer;}
 .popover div:hover{background:var(--btn);}
 .popover .none{color:var(--t3);font-size:12px;padding:7px 10px;}
@@ -143,17 +143,8 @@ body{background:var(--bg);color:var(--t1);}
   </div>
 </div>
 
-<div class="mbg" id="pattern-modal" onclick="if(event.target===this)closePatternEditor()">
-  <div class="modal2" style="max-width:900px;">
-    <div class="m-ttl">レギュラーパターン編集（全ての週の基本形として使われます）</div>
-    <div id="pattern-modal-body"></div>
-    <div class="m-actions">
-      <button onclick="closePatternEditor()">閉じる</button>
-    </div>
-  </div>
-</div>
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.16</h1>
+    <h1>シフト管理（管理者用） ver1.17</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -1215,20 +1206,27 @@ function positionModalNearTrigger(modalId, ev){
   var pane = ev && ev.target && ev.target.closest ? ev.target.closest('#pane-a-content, #pane-b-content') : null;
   if(pane){
     var r = pane.getBoundingClientRect();
-    modal.style.left = r.left+'px';
-    modal.style.top = r.top+'px';
-    modal.style.width = r.width+'px';
-    modal.style.height = r.height+'px';
-    modal.style.right = 'auto';
-    modal.style.bottom = 'auto';
-  } else {
-    modal.style.left = '';
-    modal.style.top = '';
-    modal.style.width = '';
-    modal.style.height = '';
-    modal.style.right = '';
-    modal.style.bottom = '';
+    var top = Math.max(r.top, 0);
+    var left = Math.max(r.left, 0);
+    var bottom = Math.min(r.bottom, window.innerHeight);
+    var right = Math.min(r.right, window.innerWidth);
+    var w = right - left, h = bottom - top;
+    if(w > 100 && h > 100){
+      modal.style.left = left+'px';
+      modal.style.top = top+'px';
+      modal.style.width = w+'px';
+      modal.style.height = h+'px';
+      modal.style.right = 'auto';
+      modal.style.bottom = 'auto';
+      return;
+    }
   }
+  modal.style.left = '';
+  modal.style.top = '';
+  modal.style.width = '';
+  modal.style.height = '';
+  modal.style.right = '';
+  modal.style.bottom = '';
 }
 
 function openManualInput(ev){
@@ -1324,20 +1322,11 @@ function defaultRegularShift(){
   for (var i=0;i<7;i++) out.push({s:'ok', in:9, out:17});
   return out;
 }
-// ==== レギュラーパターン編集モーダル ====
+// ==== レギュラーパターン編集（過去シフトタブ内に表示） ====
 var patternSub = 'honten';
-function swPatternSub(s){ patternSub = s; renderPatternEditor(); }
-function renderPatternEditor(){
-  document.getElementById('pattern-modal-body').innerHTML = renderGanttHtml('pattern', patternSub);
-}
-function openPatternEditor(ev){
-  document.getElementById('pattern-modal').classList.add('open');
-  positionModalNearTrigger('pattern-modal', ev);
-  renderPatternEditor();
-}
-function closePatternEditor(){
-  document.getElementById('pattern-modal').classList.remove('open');
-}
+var histView = 'history'; // 'history' | 'pattern'
+function swPatternSub(s){ patternSub = s; renderAll(); }
+function setHistView(v){ histView = v; renderAll(); }
 
 function openRegModal(ev, ei){
   REG_MODAL_EI = ei;
@@ -1665,9 +1654,15 @@ var curHistoryIdx = 0;
 var curHistorySub = 'honten';
 
 function renderHistHtml(){
-  var patternBtn = '<div style="margin-bottom:14px;"><button class="ai-btn" onclick="openPatternEditor(event)">⚙ レギュラーパターンを編集</button></div>';
-  if(HISTORY_SHIFTS.length===0) return patternBtn + '<div style="padding:20px;color:var(--t3);font-size:13px;">まだ公開履歴がありません。</div>';
-  var html = patternBtn + '<select class="week-tab" onchange="setHistory(this.value)" style="margin-bottom:10px;">';
+  var switchTabs = '<div class="subtabs" style="margin-bottom:14px;">'
+    + '<div class="stab'+(histView==='history'?' on':'')+'" onclick="setHistView(\'history\')">公開履歴</div>'
+    + '<div class="stab'+(histView==='pattern'?' on':'')+'" onclick="setHistView(\'pattern\')">⚙ レギュラーパターン編集</div>'
+    + '</div>';
+  if(histView==='pattern'){
+    return switchTabs + renderGanttHtml('pattern', patternSub);
+  }
+  if(HISTORY_SHIFTS.length===0) return switchTabs + '<div style="padding:20px;color:var(--t3);font-size:13px;">まだ公開履歴がありません。</div>';
+  var html = switchTabs + '<select class="week-tab" onchange="setHistory(this.value)" style="margin-bottom:10px;">';
   HISTORY_SHIFTS.forEach(function(h,i){ html += '<option value="'+i+'"'+(i===curHistoryIdx?' selected':'')+'>'+h.label+'</option>'; });
   html += '</select>';
   html += '<div class="subtabs">'
@@ -1856,9 +1851,6 @@ function renderAll(){
   });
   document.getElementById('pane-a-content').innerHTML = renderContent(paneA);
   document.getElementById('pane-b-content').innerHTML = renderContent(paneB);
-  if(document.getElementById('pattern-modal').classList.contains('open')){
-    renderPatternEditor();
-  }
 }
 
 initApp();
