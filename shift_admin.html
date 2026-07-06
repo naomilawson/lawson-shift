@@ -80,7 +80,11 @@ body{background:var(--bg);color:var(--t1);}
 .own-wish-row{display:flex;gap:8px;margin-top:8px;}
 .own-wish-input{flex:1;height:36px;border:1px solid var(--btn-bd);border-radius:6px;padding:0 10px;font-size:13px;background:var(--btn);color:var(--t1);}
 .mic-btn{width:36px;height:36px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;font-size:15px;}
-.popover{position:absolute;background:var(--card);border:1px solid var(--bd);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:400;min-width:140px;padding:4px;}
+.popover{position:absolute;background:var(--card);border:1px solid var(--bd);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:400;min-width:260px;max-width:340px;padding:8px;}
+.pop-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.pop-chip{display:inline-block;padding:5px 10px;border:0.5px solid var(--bd);border-radius:14px;font-size:12px;cursor:pointer;white-space:nowrap;}
+.pop-chip:hover{background:var(--btn);}
+.pop-row{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;padding:3px 2px;}
 .popover div{padding:7px 10px;font-size:13px;border-radius:5px;cursor:pointer;}
 .popover div:hover{background:var(--btn);}
 .popover .none{color:var(--t3);font-size:12px;padding:7px 10px;}
@@ -144,7 +148,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.22</h1>
+    <h1>シフト管理（管理者用） ver1.23</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -232,6 +236,7 @@ function fetchEmployees(){
     var list = [];
     snapshot.forEach(function(doc){
       var d = doc.data();
+      if(!d.name) return; // name未設定の不正データは読み込まない
       list.push({
         name: d.name,
         store: d.store,
@@ -926,6 +931,7 @@ function buildBarPopoverHtml(weekIdx, sub, day, idx){
   });
   function timeOverlaps(a,b){ return a.in < b.out && b.in < a.out; }
   var candidates = EMPLOYEES.filter(function(e){
+    if(!e.name) return false; // 名前未設定の不正データは候補から除外
     if(e.active===false) return false;
     if(e.name===bar.n) return false;
     var existing = assignedRanges[e.name];
@@ -941,35 +947,34 @@ function buildBarPopoverHtml(weekIdx, sub, day, idx){
     return segIn<=bar.in && segOut>=bar.out;
   });
   var html = '';
-  html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:12px;gap:8px;">'
-    + '<span>開始 '+bar.in+'時</span><span><button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;in&quot;,-1)" style="width:24px;height:24px;">−</button> <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;in&quot;,1)" style="width:24px;height:24px;">＋</button></span></div>'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:12px;gap:8px;">'
-    + '<span>終了 '+bar.out+'時</span><span><button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;out&quot;,-1)" style="width:24px;height:24px;">−</button> <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;out&quot;,1)" style="width:24px;height:24px;">＋</button></span></div>'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:12px;gap:8px;">'
-    + '<span>全体を移動</span><span><button onclick="shiftBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',-1)" style="width:24px;height:24px;">◀</button> <button onclick="shiftBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',1)" style="width:24px;height:24px;">▶</button></span></div>'
+  html += '<div class="pop-row"><span>開始</span><span>'+bar.in+'時 <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;in&quot;,-1)" style="width:22px;height:22px;">−</button> <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;in&quot;,1)" style="width:22px;height:22px;">＋</button></span>'
+    + '<span>終了</span><span>'+bar.out+'時 <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;out&quot;,-1)" style="width:22px;height:22px;">−</button> <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;out&quot;,1)" style="width:22px;height:22px;">＋</button></span></div>'
+    + '<div class="pop-row"><span>全体を移動</span><span><button onclick="shiftBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',-1)" style="width:22px;height:22px;">◀</button> <button onclick="shiftBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',1)" style="width:22px;height:22px;">▶</button></span></div>'
     + '<div style="border-top:0.5px solid var(--bd);margin:4px 0;"></div>';
   if(bar.unassigned){
     html += '<div class="none">'+bar.in+'〜'+bar.out+'時にこの枠へ入れる人を選択</div>';
   } else {
-    html += '<div onclick="setBreak('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">休憩を'+(bar.breaks&&bar.breaks.length?'変更':'設定')+'</div>';
+    html += '<div class="pop-chips" style="margin-bottom:4px;">'
+      + '<div class="pop-chip" onclick="setBreak('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">休憩を'+(bar.breaks&&bar.breaks.length?'変更':'設定')+'</div>';
     if(bar.breaks && bar.breaks.length){
-      html += '<div onclick="clearBreak('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">休憩を解除</div>';
+      html += '<div class="pop-chip" onclick="clearBreak('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">休憩を解除</div>';
     }
     if(barEmp && barEmp.store==='both'){
-      html += '<div onclick="moveToOtherStore('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">'+(sub==='honten'?'病院店に移す':'本店に移す')+'</div>';
+      html += '<div class="pop-chip" onclick="moveToOtherStore('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">'+(sub==='honten'?'病院店に移す':'本店に移す')+'</div>';
     }
+    html += '<div class="pop-chip" onclick="deleteBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')" style="color:#d93030;">削除</div>'
+      + '</div>';
   }
-  html += '<div onclick="deleteBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')" style="color:#d93030;">この勤務枠を削除</div>';
   html += '<div style="border-top:0.5px solid var(--bd);margin:4px 0;"></div>';
   if(candidates.length===0){
     html += '<div class="none">入れる人がいません</div>';
   } else {
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 4px;">'
-      + candidates.map(function(c){ return '<div onclick="assignName('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;'+c.name+'&quot;)">'+c.name+(c.store==='both'?'（兼務可）':'')+(bar.unassigned?'を選択':'に変更')+'</div>'; }).join('')
+    html += '<div class="pop-chips">'
+      + candidates.map(function(c){ return '<div class="pop-chip" onclick="assignName('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;'+c.name+'&quot;)">'+c.name+(c.store==='both'?'（兼務可）':'')+'</div>'; }).join('')
       + '</div>';
   }
   html += '<div style="border-top:0.5px dashed var(--bd);margin:4px 0;"></div>'
-    + '<div style="color:var(--t2);font-size:12px;" onclick="document.getElementById(&quot;name-popover&quot;).innerHTML=buildEmergencyPopoverHtml('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">⚠ 候補者外から選ぶ（緊急時）</div>';
+    + '<div style="color:var(--t2);font-size:12px;cursor:pointer;" onclick="document.getElementById(&quot;name-popover&quot;).innerHTML=buildEmergencyPopoverHtml('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">⚠ 候補者外から選ぶ（緊急時）</div>';
   return html;
 }
 function buildEmergencyPopoverHtml(weekIdx, sub, day, idx){
@@ -987,6 +992,7 @@ function buildEmergencyPopoverHtml(weekIdx, sub, day, idx){
   });
   function timeOverlaps(a,b){ return a.in < b.out && b.in < a.out; }
   var others = EMPLOYEES.filter(function(e){
+    if(!e.name) return false; // 名前未設定の不正データは候補から除外
     if(e.active===false) return false;
     if(e.name===bar.n) return false;
     var existing = assignedRanges[e.name];
@@ -996,12 +1002,12 @@ function buildEmergencyPopoverHtml(weekIdx, sub, day, idx){
     }
     return true; // 希望との一致は問わない
   });
-  var html = '<div style="padding:4px 8px 8px;font-size:12px;color:var(--t2);">⚠ 希望と一致しない人も含めて表示しています</div>';
+  var html = '<div style="padding:2px 2px 6px;font-size:12px;color:var(--t2);">⚠ 希望と一致しない人も含めて表示しています</div>';
   if(others.length===0){
     html += '<div class="none">選べる人がいません</div>';
   } else {
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 4px;">'
-      + others.map(function(c){ return '<div onclick="assignNameEmergency('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;'+c.name+'&quot;)">'+c.name+(c.store==='both'?'（兼務可）':'')+'</div>'; }).join('')
+    html += '<div class="pop-chips">'
+      + others.map(function(c){ return '<div class="pop-chip" onclick="assignNameEmergency('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;'+c.name+'&quot;)">'+c.name+(c.store==='both'?'（兼務可）':'')+'</div>'; }).join('')
       + '</div>';
   }
   html += '<div style="border-top:0.5px solid var(--bd);margin:4px 0;"></div>'
