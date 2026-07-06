@@ -148,7 +148,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.25</h1>
+    <h1>シフト管理（管理者用） ver1.26</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -767,15 +767,15 @@ function addNewSlot(weekIdx){
   if(wdChoice===null) return;
   var di = Number(wdChoice.trim())-1;
   if(isNaN(di) || di<0 || di>6){ alert('1〜7の番号を入力してください'); return; }
-  var timeInput = prompt('時間帯を入力（例: 10-15 → 10時台〜14時台）', '10-15');
+  var timeInput = prompt('時間帯を入力（例: 10-15 → 10時〜15時）', '10-15');
   var m = (timeInput||'').trim().match(/^(\d+)[-~～](\d+)$/);
   if(!m){ alert('入力形式が正しくありません（例: 10-15）'); return; }
   var inH = Number(m[1]), outH = Number(m[2]);
   var gST = subInput==='hospital'?7:6, gEN = subInput==='hospital'?20:23;
-  if(inH<gST || outH>=gEN || outH<=inH){ alert('営業時間（'+gST+'〜'+gEN+'時）の範囲内で入力してください'); return; }
+  if(inH<gST || outH>gEN || outH<=inH){ alert('営業時間（'+gST+'〜'+gEN+'時）の範囲内で入力してください'); return; }
   if(!getBoard(weekIdx)){ alert('先に下書きを作成してください'); return; }
   pushHistory();
-  getBoard(weekIdx)[subInput][di].staff.push({n:null, in:inH, out:outH+1, unassigned:true});
+  getBoard(weekIdx)[subInput][di].staff.push({n:null, in:inH, out:outH, unassigned:true});
   renderAll();
   saveDraftToFirestore(weekIdx);
 }
@@ -794,14 +794,14 @@ function onTrackClick(ev, weekIdx, sub, di){
 }
 function addNewSlotAt(weekIdx, sub, di, guessIn, guessOut){
   var gST = sub==='hospital'?7:6, gEN = sub==='hospital'?20:23;
-  var timeInput = prompt('時間帯を入力（例: '+guessIn+'-'+guessOut+' → '+guessIn+'時台〜'+(guessOut-1)+'時台）', guessIn+'-'+guessOut);
+  var timeInput = prompt('時間帯を入力（例: '+guessIn+'-'+guessOut+' → '+guessIn+'時〜'+guessOut+'時）', guessIn+'-'+guessOut);
   if(timeInput===null) return;
   var m = timeInput.trim().match(/^(\d+)[-~～](\d+)$/);
   if(!m){ alert('入力形式が正しくありません（例: 10-15）'); return; }
   var inH = Number(m[1]), outH = Number(m[2]);
-  if(inH<gST || outH>=gEN || outH<=inH){ alert('営業時間（'+gST+'〜'+gEN+'時）の範囲内で入力してください'); return; }
+  if(inH<gST || outH>gEN || outH<=inH){ alert('営業時間（'+gST+'〜'+gEN+'時）の範囲内で入力してください'); return; }
   pushHistory();
-  getBoard(weekIdx)[sub][di].staff.push({n:null, in:inH, out:outH+1, unassigned:true});
+  getBoard(weekIdx)[sub][di].staff.push({n:null, in:inH, out:outH, unassigned:true});
   renderAll();
   saveDraftToFirestore(weekIdx);
 }
@@ -1070,12 +1070,12 @@ function setBreak(weekIdx,sub,day,idx){
   closePopover();
   var bar = getBoard(weekIdx)[sub][day].staff[idx];
   var cur = bar.breaks && bar.breaks[0];
-  var curStr = cur ? (cur.out-cur.in>1 ? cur.in+'-'+(cur.out-1) : String(cur.in)) : '';
-  var input = prompt('休憩の時間帯を入力してください（1コマ=1時間の考え方です）\n例: 11 → 11時台のみ休憩\n例: 11-13 → 11〜13時台まで休憩（3時間）', curStr);
+  var curStr = cur ? (cur.out-cur.in>1 ? cur.in+'-'+cur.out : String(cur.in)) : '';
+  var input = prompt('休憩の時間帯を入力してください\n例: 11 → 11時台のみ休憩\n例: 11-13 → 11時〜13時まで休憩（2時間）', curStr);
   if(input===null || input.trim()==='') return;
   var m = input.trim().match(/^(\d+)[-~～](\d+)$/);
   var bi, bo;
-  if(m){ bi = Number(m[1]); bo = Number(m[2])+1; }
+  if(m){ bi = Number(m[1]); bo = Number(m[2]); }
   else {
     var single = Number(input.trim());
     if(isNaN(single)){ alert('入力形式が正しくありません（例: 11 または 11-13）'); return; }
