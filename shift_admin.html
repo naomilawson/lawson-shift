@@ -153,7 +153,7 @@ body{background:var(--bg);color:var(--t1);}
   </div>
 </div>
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.15</h1>
+    <h1>シフト管理（管理者用） ver1.16</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -1086,7 +1086,10 @@ function renderGanttHtml(weekIdx, sub){
     + '<div class="stab'+(sub==='honten'?' on':'')+'" onclick="'+swFn+'(\'honten\')">本店</div>'
     + '<div class="stab'+(sub==='hospital'?' on':'')+'" onclick="'+swFn+'(\'hospital\')">病院店</div>'
     + '</div>';
-  if(!getBoard(weekIdx)) return tabsHtml + '<div style="padding:20px;color:var(--t3);font-size:13px;">まだ下書きがありません。「AIで下書き作成」を押してください。</div>';
+  if(!getBoard(weekIdx)){
+    var msg = weekIdx==='pattern' ? 'レギュラーパターンの読み込みに失敗しています。「更新」を押して再取得してください。' : 'まだ下書きがありません。「AIで下書き作成」を押してください。';
+    return tabsHtml + '<div style="padding:20px;color:var(--t3);font-size:13px;">'+msg+'</div>';
+  }
   var days = getBoard(weekIdx)[sub];
   var gST = sub==='hospital'?7:6, gEN = sub==='hospital'?20:23;
   var sp = gEN-gST;
