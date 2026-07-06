@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="color-scheme" content="light">
-<title>シフト管理 ver1.38</title>
+<title>シフト管理 ver1.39</title>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
@@ -120,8 +120,10 @@ body.dk .c-sat{color:#00d8ff;} body.dk .c-sun{color:#ff4daa;}
 .sched-tbl tr:last-child td{border-bottom:none;}
 .dc{text-align:left;font-weight:600;min-width:48px;}
 .s-ok{color:#2a9e52;font-weight:700;} .s-ng{color:#d93030;font-weight:700;} .s-tm{color:#2272cc;font-weight:600;}
+.s-nodata{background:#fbe2e2;color:#a3231a;font-weight:600;}
 .s-me{background:#fffbe6;}
 body.dk .s-ok{color:#3dff7a;} body.dk .s-ng{color:#ff4daa;} body.dk .s-tm{color:#00d8ff;}
+body.dk .s-nodata{background:#3a1414;color:#ff8a7a;}
 body.dk .s-me{background:#1e1e08;}
 
 /* モーダル */
@@ -171,7 +173,7 @@ body.dk .s-me{background:#1e1e08;}
   <div class="hd">
     <div class="hd-l">
       <div class="av" id="hd-avatar">?</div>
-      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.38</div></div>
+      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.39</div></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <button id="refresh-btn" class="gear-btn" onclick="refreshAllData()"><span id="refresh-btn-icon">⟳</span> <span id="refresh-btn-label">更新</span></button>
@@ -185,9 +187,7 @@ body.dk .s-me{background:#1e1e08;}
   </div>
   <div id="wpnl" class="pnl on"><div id="wish-area"></div></div>
   <div id="scpnl" class="pnl">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 2px 8px;">
-      <span style="font-size:13px;font-weight:600;color:var(--t1)">6/22（月）〜 7/5（日）</span>
-    </div>
+    <div class="subtabs" id="sched-week-tabs"></div>
     <div class="sched-wrap"><div class="sched-scroll"><table class="sched-tbl" id="sched-tbl"></table></div></div>
   </div>
   <div id="spnl" class="pnl">
@@ -308,6 +308,7 @@ function refreshAllData(){
     WEEKS = generateRollingWeeks(4);
     SHIFT_WEEKS = generateRollingWeeks(4);
     GWEEK_LABELS = SHIFT_WEEKS.map(function(w){ return w.label; });
+    SCHED_LOADED = false;
     return Promise.all([loadMyAvailability(), fetchPublishedShifts()]);
   }).then(function(){
     hideFbError();
@@ -315,6 +316,7 @@ function refreshAllData(){
     setTimeout(function(){ setRefreshBtnLabel('更新'); }, 5000);
     renderGWeekTabs();
     renderGantt(curSub);
+    if(document.getElementById('scpnl').classList.contains('on')) renderSched();
   }).catch(function(err){
     showFbError('データの取得に失敗しました: '+err.message);
     setRefreshBtnLabel('更新');
@@ -479,49 +481,88 @@ function startMic(wi) {
   r.onresult = function(e) { MEMO[wi] = e.results[0][0].transcript; renderWish(); };
 }
 
-// ===== スケジュール =====
-var SCHED_M = ['阿部','佐藤','ともえ','ひふみ','山田','南','渡辺','曽我','澤田','竹花','鷲尾','吉澤','田中'];
+// ===== スケジュール（全員の希望一覧） =====
 var MY_N_KEY = 'ciel_shift_my_name';
 var MY_N = localStorage.getItem(MY_N_KEY) || null;
-var SCHED = [
-  {date:'6/22',wd:'月',d:{南:'〇',渡辺:'✖',曽我:'✖',澤田:'✖',竹花:'17～',鷲尾:'✖',吉澤:'✖',田中:'〇'}},
-  {date:'6/23',wd:'火',d:{南:'〇',渡辺:'〇',曽我:'20～23',澤田:'✖',竹花:'✖',鷲尾:'✖',吉澤:'17～',田中:'〇'}},
-  {date:'6/24',wd:'水',d:{南:'〇',渡辺:'✖',曽我:'20～23',澤田:'✖',竹花:'19～',鷲尾:'〇',吉澤:'６～8',田中:'✖'}},
-  {date:'6/25',wd:'木',d:{山田:'✖',南:'〇',渡辺:'〇',曽我:'20～23',澤田:'✖',竹花:'✖',鷲尾:'〇',吉澤:'✖',田中:'✖'}},
-  {date:'6/26',wd:'金',d:{阿部:'✖',南:'〇',渡辺:'〇',曽我:'20～23',澤田:'✖',竹花:'17～',鷲尾:'✖',吉澤:'✖',田中:'〇'}},
-  {date:'6/27',wd:'土',d:{阿部:'✖',南:'～17',渡辺:'〇',曽我:'✖',澤田:'✖',竹花:'✖',鷲尾:'✖',吉澤:'✖',田中:'〇'}},
-  {date:'6/28',wd:'日',d:{ひふみ:'✖',渡辺:'✖',曽我:'✖',澤田:'✖',竹花:'✖',鷲尾:'✖',吉澤:'✖',田中:'〇'}},
-  {date:'6/29',wd:'月',d:{佐藤:'✖',南:'〇',渡辺:'〇',曽我:'20～23',澤田:'✖',竹花:'17～',鷲尾:'✖',吉澤:'✖',田中:'〇'}},
-  {date:'6/30',wd:'火',d:{佐藤:'✖',南:'〇',渡辺:'〇',曽我:'✖',澤田:'✖',竹花:'✖',鷲尾:'✖',吉澤:'６～8',田中:'✖'}},
-  {date:'7/1',wd:'水',d:{山田:'～15',南:'〇',渡辺:'✖',曽我:'20～23',澤田:'✖',竹花:'✖',鷲尾:'13～',吉澤:'６～8',田中:'✖'}},
-  {date:'7/2',wd:'木',d:{南:'11～',渡辺:'〇',曽我:'20～23',澤田:'✖',竹花:'✖',鷲尾:'〇',吉澤:'✖',田中:'〇'}},
-  {date:'7/3',wd:'金',d:{阿部:'✖',南:'〇',渡辺:'✖',曽我:'20～23',澤田:'✖',竹花:'17～',鷲尾:'〇',吉澤:'✖',田中:'〇'}},
-  {date:'7/4',wd:'土',d:{阿部:'✖',南:'〇',渡辺:'✖',曽我:'✖',澤田:'✖',竹花:'17～',鷲尾:'〇',吉澤:'〇',田中:'〇'}},
-  {date:'7/5',wd:'日',d:{阿部:'✖',ひふみ:'✖',南:'〇',渡辺:'✖',曽我:'✖',澤田:'✖',竹花:'17～',鷲尾:'〇',吉澤:'〇',田中:'〇'}}
-];
+var SCHED_LOADED = false;
+var SCHED_DATA = {}; // SCHED_DATA[weekId][name] = {days:[{s,in,out,freeText} x7], memo, status}
+var curSchedWeek = 0;
 
-function renderSched() {
-  var members = SCHED_M.filter(function(m) {
-    return SCHED.some(function(r) { return r.d[m] !== undefined; });
+function schedDayToDisplay(day){
+  if(!day) return null;
+  if(day.s==='ok') return '〇';
+  if(day.s==='ng') return '×';
+  if(day.freeText) return day.freeText;
+  if(day.in!=null && day.out!=null) return day.in+'～'+day.out;
+  if(day.in!=null) return day.in+'～';
+  if(day.out!=null) return '～'+day.out;
+  return '〇';
+}
+
+function fetchAllSchedule(){
+  var jobs = [];
+  WEEKS.forEach(function(wk){
+    if(!SCHED_DATA[wk.weekId]) SCHED_DATA[wk.weekId] = {};
+    EMPLOYEE_LIST.forEach(function(name){
+      jobs.push(
+        fbDb.collection('availability').doc(wk.weekId+'_'+name).get().then(function(doc){
+          if(doc.exists) SCHED_DATA[wk.weekId][name] = doc.data();
+        })
+      );
+    });
   });
+  return Promise.all(jobs);
+}
+
+function renderSchedWeekTabs(){
+  var h = '';
+  for (var i = 0; i < WEEKS.length; i++) {
+    h += '<div class="stab' + (i===curSchedWeek?' on':'') + '" onclick="swSchedWeek(' + i + ',this)">' + WEEKS[i].label + '</div>';
+  }
+  document.getElementById('sched-week-tabs').innerHTML = h;
+}
+function swSchedWeek(i, el){
+  curSchedWeek = i;
+  document.querySelectorAll('#sched-week-tabs .stab').forEach(function(t){t.classList.remove('on');});
+  el.classList.add('on');
+  renderSchedTable(i);
+}
+function renderSchedTable(wi){
+  var wk = WEEKS[wi];
+  var names = EMPLOYEE_LIST.slice();
   var h = '<tr><th class="dc">日付</th>';
-  for (var i = 0; i < members.length; i++) {
-    h += '<th' + (members[i] === MY_N ? ' class="s-me"' : '') + '>' + members[i] + '</th>';
+  for (var i = 0; i < names.length; i++) {
+    h += '<th' + (names[i] === MY_N ? ' class="s-me"' : '') + '>' + names[i] + '</th>';
   }
   h += '</tr>';
-  for (var ri = 0; ri < SCHED.length; ri++) {
-    var row = SCHED[ri];
-    var wc = row.wd === '土' ? 'style="color:#1a6abf"' : row.wd === '日' ? 'style="color:#bf1a1a"' : '';
-    h += '<tr><td class="dc" ' + wc + '>' + row.date + '<br><small>' + row.wd + '</small></td>';
-    for (var mi = 0; mi < members.length; mi++) {
-      var m = members[mi];
-      var v = row.d[m];
-      var cls = v === '〇' ? 's-ok' : v === '✖' ? 's-ng' : v ? 's-tm' : '';
-      h += '<td class="' + cls + (m === MY_N ? ' s-me' : '') + '">' + (v || '－') + '</td>';
+  for (var di = 0; di < 7; di++) {
+    var wc = WDS[di] === '土' ? 'style="color:#1a6abf"' : WDS[di] === '日' ? 'style="color:#bf1a1a"' : '';
+    h += '<tr><td class="dc" ' + wc + '>' + wk.days[di] + '<br><small>' + WDS[di] + '</small></td>';
+    for (var mi = 0; mi < names.length; mi++) {
+      var m = names[mi];
+      var rec = SCHED_DATA[wk.weekId] && SCHED_DATA[wk.weekId][m];
+      var v = rec && rec.days ? schedDayToDisplay(rec.days[di]) : null;
+      var cls = v===null ? 's-nodata' : v === '〇' ? 's-ok' : v === '×' ? 's-ng' : 's-tm';
+      h += '<td class="' + cls + (m === MY_N ? ' s-me' : '') + '">' + (v===null ? '－' : v) + '</td>';
     }
     h += '</tr>';
   }
   document.getElementById('sched-tbl').innerHTML = h;
+}
+function renderSched() {
+  if (!SCHED_LOADED) {
+    document.getElementById('sched-tbl').innerHTML = '<tr><td style="padding:16px;color:var(--t3);">読み込み中...</td></tr>';
+    fetchAllSchedule().then(function(){
+      SCHED_LOADED = true;
+      renderSchedWeekTabs();
+      renderSchedTable(curSchedWeek);
+    }).catch(function(err){
+      showFbError('スケジュールデータの取得に失敗しました: ' + err.message);
+    });
+  } else {
+    renderSchedWeekTabs();
+    renderSchedTable(curSchedWeek);
+  }
 }
 
 // ===== ガントチャート =====
