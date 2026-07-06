@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="color-scheme" content="light">
-<title>シフト管理 ver1.37</title>
+<title>シフト管理 ver1.38</title>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
@@ -52,7 +52,7 @@ body{background:var(--bg);color:var(--t1);}
 @keyframes unsent-blink{0%,100%{border-color:#d93030;}50%{border-color:transparent;}}
 .wish-week-lbl{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:var(--t1);padding:5px 10px;border-bottom:1px solid var(--bd);background:var(--btn);}
 .wk-label{flex-shrink:0;}
-.wk-status{flex:1;text-align:right;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wk-status{flex:1;text-align:right;font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .wk-send-btn{flex-shrink:0;background:#ede8fb;color:#5c3dc8;border:2px solid #7c4dff;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;}
 body.dk .wk-send-btn{background:#1e1040;color:#b09cff;border-color:#7c4dff;}
 .wish-grid{display:grid;grid-template-columns:repeat(7,1fr);}
@@ -171,7 +171,7 @@ body.dk .s-me{background:#1e1e08;}
   <div class="hd">
     <div class="hd-l">
       <div class="av" id="hd-avatar">?</div>
-      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.37</div></div>
+      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.38</div></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <button id="refresh-btn" class="gear-btn" onclick="refreshAllData()"><span id="refresh-btn-icon">⟳</span> <span id="refresh-btn-label">更新</span></button>
@@ -207,6 +207,13 @@ body.dk .s-me{background:#1e1e08;}
   <div class="modal">
     <div class="m-ttl">あなたの名前を選んでください</div>
     <div id="name-select-list" style="display:flex;flex-direction:column;gap:8px;margin-top:10px;"></div>
+    <div style="border-top:1px solid var(--bd);margin:14px 0 10px;"></div>
+    <div class="m-lbl" style="margin-bottom:6px;">名前が一覧にない場合（新規登録）</div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="new-name-input" class="m-input" placeholder="名前を入力" style="flex:1;">
+      <button class="gear-btn" onclick="registerNewEmployee()">新規登録</button>
+    </div>
+    <div style="font-size:11px;color:var(--t3);margin-top:6px;">店舗区分は後で管理者が設定します。</div>
   </div>
 </div>
 
@@ -221,6 +228,7 @@ body.dk .s-me{background:#1e1e08;}
         <div class="tog-tr"></div><div class="tog-th"></div>
       </label>
     </div>
+    <div id="onboard-banner" style="display:none;background:var(--ok-d);color:var(--ok-dt);border-radius:8px;padding:10px 12px;font-size:12px;margin:10px 0;line-height:1.5;">初回設定：ふだんのシフト希望パターンを設定してください。あくまで初期値なので、毎週の希望入力で自由に調整できます。</div>
     <div class="m-sec">通常シフトパターン（希望入力の初期値）</div>
     <div class="reg-grid" id="reg-grid"></div>
     <div id="reg-times"></div>
@@ -783,6 +791,7 @@ function saveRegularShift(){
   fbDb.collection('employees').doc(MY_N).set({regularShift: REG_S}, {merge:true}).then(function(){
     EMPLOYEE_REGULAR[MY_N] = REG_S;
     showToast('通常シフトパターンを保存しました');
+    document.getElementById('onboard-banner').style.display = 'none';
   }).catch(function(err){
     showFbError('保存に失敗しました: ' + err.message);
   }).then(function(){
@@ -871,6 +880,39 @@ function updateHeaderName(){
   document.getElementById('hd-name').textContent = MY_N ? (MY_N + ' さん') : '未設定';
 }
 
+function completeNameSelect(name){
+  var isFirstTime = !EMPLOYEE_REGULAR[name];
+  MY_N = name;
+  localStorage.setItem(MY_N_KEY, name);
+  document.getElementById('name-select-modal').style.display = 'none';
+  updateHeaderName();
+  applyRegularShift();
+  loadMyAvailability();
+  fetchPublishedShifts();
+  if(isFirstTime) showFirstTimePatternGuide();
+}
+function registerNewEmployee(){
+  var input = document.getElementById('new-name-input');
+  var name = input.value.trim();
+  if(!name){ alert('名前を入力してください'); return; }
+  if(EMPLOYEE_LIST.indexOf(name)!==-1){ alert('同じ名前の従業員が既にいます。一覧から選んでください。'); return; }
+  var usedColors = EMPLOYEE_LIST.map(function(n){ return EMPLOYEE_COLORS[n]; }).filter(Boolean);
+  var color = G_PALETTE.find(function(c){ return usedColors.indexOf(c)===-1; }) || G_PALETTE[EMPLOYEE_LIST.length % G_PALETTE.length];
+  fbDb.collection('employees').doc(name).set({
+    name: name, store: null, role: null, color: color, constraints: [], active: true
+  }).then(function(){
+    EMPLOYEE_LIST.push(name);
+    EMPLOYEE_COLORS[name] = color;
+    input.value = '';
+    completeNameSelect(name);
+  }).catch(function(err){
+    showFbError('新規登録に失敗しました: ' + err.message);
+  });
+}
+function showFirstTimePatternGuide(){
+  openM();
+  document.getElementById('onboard-banner').style.display = 'block';
+}
 function showNameSelect(){
   var list = document.getElementById('name-select-list');
   list.innerHTML = '';
@@ -879,13 +921,7 @@ function showNameSelect(){
     btn.className = 'name-btn';
     btn.textContent = name;
     btn.onclick = function(){
-      MY_N = name;
-      localStorage.setItem(MY_N_KEY, name);
-      document.getElementById('name-select-modal').style.display = 'none';
-      updateHeaderName();
-      applyRegularShift();
-      loadMyAvailability();
-      fetchPublishedShifts();
+      completeNameSelect(name);
     };
     list.appendChild(btn);
   });

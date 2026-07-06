@@ -144,7 +144,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.20</h1>
+    <h1>シフト管理（管理者用） ver1.21</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -968,7 +968,49 @@ function buildBarPopoverHtml(weekIdx, sub, day, idx){
       + candidates.map(function(c){ return '<div onclick="assignName('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;'+c.name+'&quot;)">'+c.name+(c.store==='both'?'（兼務可）':'')+(bar.unassigned?'を選択':'に変更')+'</div>'; }).join('')
       + '</div>';
   }
+  html += '<div style="border-top:0.5px dashed var(--bd);margin:4px 0;"></div>'
+    + '<div style="color:var(--t2);font-size:12px;" onclick="document.getElementById(&quot;name-popover&quot;).innerHTML=buildEmergencyPopoverHtml('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">⚠ 候補者外から選ぶ（緊急時）</div>';
   return html;
+}
+function buildEmergencyPopoverHtml(weekIdx, sub, day, idx){
+  var wkArg = (typeof weekIdx === 'string') ? ('&quot;'+weekIdx+'&quot;') : weekIdx;
+  var draft = getBoard(weekIdx)[sub];
+  var bar = draft[day].staff[idx];
+  var assignedRanges = {};
+  ['honten','hospital'].forEach(function(s){
+    if(!getBoard(weekIdx)[s]) return;
+    getBoard(weekIdx)[s][day].staff.forEach(function(x){
+      if(!x.n) return;
+      if(!assignedRanges[x.n]) assignedRanges[x.n] = [];
+      assignedRanges[x.n].push({in:x.in, out:x.out});
+    });
+  });
+  function timeOverlaps(a,b){ return a.in < b.out && b.in < a.out; }
+  var others = EMPLOYEES.filter(function(e){
+    if(e.active===false) return false;
+    if(e.name===bar.n) return false;
+    var existing = assignedRanges[e.name];
+    if(existing && existing.length){
+      if(e.store!=='both') return false; // 兼務不可の人は同日の二重勤務不可（緊急時でも二重勤務は防止）
+      if(existing.some(function(r){ return timeOverlaps(r, {in:bar.in, out:bar.out}); })) return false;
+    }
+    return true; // 希望との一致は問わない
+  });
+  var html = '<div style="padding:4px 8px 8px;font-size:12px;color:var(--t2);">⚠ 希望と一致しない人も含めて表示しています</div>';
+  if(others.length===0){
+    html += '<div class="none">選べる人がいません</div>';
+  } else {
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 4px;">'
+      + others.map(function(c){ return '<div onclick="assignNameEmergency('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;'+c.name+'&quot;)">'+c.name+(c.store==='both'?'（兼務可）':'')+'</div>'; }).join('')
+      + '</div>';
+  }
+  html += '<div style="border-top:0.5px solid var(--bd);margin:4px 0;"></div>'
+    + '<div onclick="document.getElementById(&quot;name-popover&quot;).innerHTML=buildBarPopoverHtml('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">← 戻る</div>';
+  return html;
+}
+function assignNameEmergency(weekIdx, sub, day, idx, name){
+  if(!confirm(name+'さんは、この時間帯の希望と一致していない可能性があります。緊急対応として割り当てますか？')) return;
+  assignName(weekIdx, sub, day, idx, name);
 }
 function positionPopover(pop, rect){
   pop.style.visibility = 'hidden';
@@ -1235,11 +1277,12 @@ function isWeekPublished(label){
 function renderSchedHtml(){
   var names = EMPLOYEES.filter(function(e){ return e.active!==false; }).map(function(e){ return e.name; });
   var html = '<div style="margin-bottom:10px;"><button class="ai-btn" onclick="openManualInput(event)">✎ 手動入力</button></div>';
-  html += '<div class="sched-wrap" style="overflow-x:auto;"><table class="sched-tbl"><tr><th>日付</th>';
-  names.forEach(function(n){ html += '<th>'+n+'</th>'; });
-  html += '</tr>';
-  WEEKS_SCHED.forEach(function(wk){
+  WEEKS_SCHED.forEach(function(wk, wi){
     var published = isWeekPublished(wk.label);
+    html += '<div style="font-size:13px;font-weight:600;margin:'+(wi===0?'0':'18px')+' 0 6px;">'+wk.label+'</div>';
+    html += '<div class="sched-wrap" style="overflow-x:auto;"><table class="sched-tbl"><tr><th>日付</th>';
+    names.forEach(function(n){ html += '<th>'+n+'</th>'; });
+    html += '</tr>';
     wk.days.forEach(function(d, di){
       var rowBg = published ? 'background:var(--ok-d);' : '';
       html += '<tr style="'+rowBg+'"><td style="text-align:left;font-weight:600;">'+WDS[di]+' '+d+(published?'　済':'')+'</td>';
@@ -1251,8 +1294,19 @@ function renderSchedHtml(){
       });
       html += '</tr>';
     });
+    html += '</table></div>';
+    var memoRows = names.map(function(n){
+      var rec = AVAIL_DATA[wk.weekId] && AVAIL_DATA[wk.weekId][n];
+      var memo = rec && rec.memo ? String(rec.memo).trim() : '';
+      return memo ? {name:n, memo:memo} : null;
+    }).filter(Boolean);
+    if(memoRows.length){
+      html += '<div style="font-size:12px;background:var(--btn);border-radius:6px;padding:8px 10px;margin-top:4px;">'
+        + memoRows.map(function(r){ return '<div style="padding:2px 0;">メモ：'+r.name+'　'+r.memo+'</div>'; }).join('')
+        + '</div>';
+    }
   });
-  html += '</table></div><div style="font-size:11px;color:var(--t3);margin-top:8px;">この表は表示専用です。内容を変更する場合は「✎ 手動入力」ボタンから編集してください。</div>';
+  html += '<div style="font-size:11px;color:var(--t3);margin-top:8px;">この表は表示専用です。内容を変更する場合は「✎ 手動入力」ボタンから編集してください。</div>';
   return html;
 }
 
