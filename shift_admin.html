@@ -89,14 +89,17 @@ body{background:var(--bg);color:var(--t1);}
 .modal2{background:var(--card);border-radius:12px;padding:20px;width:92%;max-width:480px;max-height:86vh;overflow-y:auto;}
 .modal2 .m-ttl{font-size:16px;font-weight:700;margin-bottom:14px;}
 .modal2 select{width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--bd);background:var(--btn);color:var(--t1);font-size:14px;margin-bottom:10px;}
-.mi-day{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd);}
-.mi-day .mi-wd{width:32px;font-weight:700;font-size:14px;}
-.mi-toggle{flex:1;padding:8px 0;border-radius:6px;border:2px solid;font-weight:700;text-align:center;cursor:pointer;font-size:14px;}
-.mi-toggle.ok{color:#2a9e52;border-color:#2a9e52;}
-.mi-toggle.ng{color:#d93030;border-color:#d93030;}
-.mi-toggle.tm{color:#2272cc;border-color:#2272cc;font-weight:400;}
-.mi-time{display:flex;align-items:center;gap:4px;margin-left:8px;}
-.mi-time select{width:auto;margin-bottom:0;padding:5px 6px;font-size:13px;}
+.dg-grid{display:flex;gap:4px;margin:12px 0;}
+.dg-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}
+.dg-wd{font-size:12px;font-weight:700;color:var(--t2);}
+.dg-btn{width:100%;padding:9px 0;border-radius:6px;border:2px solid;font-weight:700;text-align:center;cursor:pointer;font-size:14px;}
+.dg-btn.ok{color:#2a9e52;border-color:#2a9e52;}
+.dg-btn.ng{color:#d93030;border-color:#d93030;}
+.dg-btn.tm{color:#2272cc;border-color:#2272cc;font-weight:400;font-size:12px;}
+.dg-times{margin-top:4px;}
+.dg-time-row{display:flex;align-items:center;gap:6px;padding:5px 0;font-size:13px;border-bottom:1px solid var(--bd);}
+.dg-time-row .dg-time-wd{width:28px;font-weight:700;}
+.dg-time-row select{width:auto;margin-bottom:0;padding:5px 6px;font-size:13px;}
 .modal2 .m-actions{display:flex;gap:8px;margin-top:16px;}
 .modal2 .m-actions button{flex:1;padding:10px;border-radius:8px;border:1px solid var(--bd);cursor:pointer;font-size:14px;}
 .modal2 .m-actions .save{background:var(--t1);color:#fff;border:none;}
@@ -114,12 +117,13 @@ body{background:var(--bg);color:var(--t1);}
 <div class="app">
   <div id="fb-error-banner" style="display:none;background:#fdecea;color:#a3231a;border:1px solid #f5c2c0;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:14px;"></div>
 
-<div class="mbg" id="manual-input-modal">
+<div class="mbg" id="manual-input-modal" onclick="if(event.target===this)closeManualInput()">
   <div class="modal2">
     <div class="m-ttl">希望データの手動入力</div>
     <select id="mi-name-select" onchange="onManualSelectChange()"></select>
     <select id="mi-week-select" onchange="onManualSelectChange()"></select>
-    <div id="mi-days"></div>
+    <div id="mi-grid"></div>
+    <div id="mi-times"></div>
     <div class="m-actions">
       <button onclick="closeManualInput()">キャンセル</button>
       <button class="save" onclick="saveManualInput()">保存</button>
@@ -127,10 +131,11 @@ body{background:var(--bg);color:var(--t1);}
   </div>
 </div>
 
-<div class="mbg" id="reg-modal">
+<div class="mbg" id="reg-modal" onclick="if(event.target===this)closeRegModal()">
   <div class="modal2">
     <div class="m-ttl" id="reg-modal-ttl">レギュラーシフト設定</div>
-    <div id="reg-days"></div>
+    <div id="reg-grid2"></div>
+    <div id="reg-times2"></div>
     <div class="m-actions">
       <button onclick="closeRegModal()">キャンセル</button>
       <button class="save" onclick="saveRegModal()">保存</button>
@@ -1162,7 +1167,7 @@ for (var _mh = 5; _mh <= 23; _mh++) MI_HRS.push(_mh);
 
 function miTimeOpts(val){
   var s = '';
-  for (var i=0;i<MI_HRS.length;i++){ s += '<option'+(MI_HRS[i]==val?' selected':'')+'>'+MI_HRS[i]+':00</option>'; }
+  for (var i=0;i<MI_HRS.length;i++){ s += '<option value="'+MI_HRS[i]+'"'+(MI_HRS[i]==val?' selected':'')+'>'+MI_HRS[i]+'時</option>'; }
   return s;
 }
 
@@ -1199,22 +1204,32 @@ function cycleManualDay(di){
   renderManualDays();
 }
 function setManualTime(di, field, val){
-  MI_DAYS[di][field] = +val;
+  MI_DAYS[di][field] = parseInt(val, 10);
+  renderManualDays();
 }
 function renderManualDays(){
   var wk = WEEKS_SCHED.find(function(w){ return w.weekId === document.getElementById('mi-week-select').value; });
-  var html = '';
+  var grid = '<div class="dg-grid">';
   for (var di=0; di<7; di++){
     var d = MI_DAYS[di];
-    var lbl = d.s==='ok' ? '〇' : d.s==='ng' ? '休' : (d.in+'～'+d.out);
-    html += '<div class="mi-day"><span class="mi-wd">'+WDS[di]+' '+ (wk?wk.days[di]:'') +'</span>'
-      + '<span class="mi-toggle '+d.s+'" onclick="cycleManualDay('+di+')">'+lbl+'</span>';
-    if (d.s==='tm'){
-      html += '<span class="mi-time"><select onchange="setManualTime('+di+',\'in\',this.value)">'+miTimeOpts(d.in)+'</select>〜<select onchange="setManualTime('+di+',\'out\',this.value)">'+miTimeOpts(d.out)+'</select></span>';
-    }
-    html += '</div>';
+    var lbl = d.s==='ok' ? '〇' : d.s==='ng' ? '休' : (d.in+'-'+d.out);
+    grid += '<div class="dg-col"><div class="dg-wd">'+WDS[di]+(wk?'<br>'+wk.days[di]:'')+'</div>'
+      + '<div class="dg-btn '+d.s+'" onclick="cycleManualDay('+di+')">'+lbl+'</div></div>';
   }
-  document.getElementById('mi-days').innerHTML = html;
+  grid += '</div>';
+  document.getElementById('mi-grid').innerHTML = grid;
+
+  var timesHtml = '<div class="dg-times">';
+  for (var di2=0; di2<7; di2++){
+    var d2 = MI_DAYS[di2];
+    if (d2.s!=='tm') continue;
+    timesHtml += '<div class="dg-time-row"><span class="dg-time-wd">'+WDS[di2]+'</span>'
+      + '<select onchange="setManualTime('+di2+',\'in\',this.value)">'+miTimeOpts(d2.in)+'</select>'
+      + '<span>〜</span>'
+      + '<select onchange="setManualTime('+di2+',\'out\',this.value)">'+miTimeOpts(d2.out)+'</select></div>';
+  }
+  timesHtml += '</div>';
+  document.getElementById('mi-times').innerHTML = timesHtml;
 }
 function saveManualInput(){
   var name = document.getElementById('mi-name-select').value;
@@ -1268,21 +1283,31 @@ function cycleRegModalDay(di){
   renderRegModalDays();
 }
 function setRegModalTime(di, field, val){
-  REG_MODAL_DAYS[di][field] = +val;
+  REG_MODAL_DAYS[di][field] = parseInt(val, 10);
+  renderRegModalDays();
 }
 function renderRegModalDays(){
-  var html = '';
+  var grid = '<div class="dg-grid">';
   for (var di=0; di<7; di++){
     var d = REG_MODAL_DAYS[di];
-    var lbl = d.s==='ok' ? '〇' : d.s==='ng' ? '休' : (d.in+'～'+d.out);
-    html += '<div class="mi-day"><span class="mi-wd">'+WDS[di]+'</span>'
-      + '<span class="mi-toggle '+d.s+'" onclick="cycleRegModalDay('+di+')">'+lbl+'</span>';
-    if (d.s==='tm'){
-      html += '<span class="mi-time"><select onchange="setRegModalTime('+di+',\'in\',this.value)">'+miTimeOpts(d.in)+'</select>〜<select onchange="setRegModalTime('+di+',\'out\',this.value)">'+miTimeOpts(d.out)+'</select></span>';
-    }
-    html += '</div>';
+    var lbl = d.s==='ok' ? '〇' : d.s==='ng' ? '休' : (d.in+'-'+d.out);
+    grid += '<div class="dg-col"><div class="dg-wd">'+WDS[di]+'</div>'
+      + '<div class="dg-btn '+d.s+'" onclick="cycleRegModalDay('+di+')">'+lbl+'</div></div>';
   }
-  document.getElementById('reg-days').innerHTML = html;
+  grid += '</div>';
+  document.getElementById('reg-grid2').innerHTML = grid;
+
+  var timesHtml = '<div class="dg-times">';
+  for (var di2=0; di2<7; di2++){
+    var d2 = REG_MODAL_DAYS[di2];
+    if (d2.s!=='tm') continue;
+    timesHtml += '<div class="dg-time-row"><span class="dg-time-wd">'+WDS[di2]+'</span>'
+      + '<select onchange="setRegModalTime('+di2+',\'in\',this.value)">'+miTimeOpts(d2.in)+'</select>'
+      + '<span>〜</span>'
+      + '<select onchange="setRegModalTime('+di2+',\'out\',this.value)">'+miTimeOpts(d2.out)+'</select></div>';
+  }
+  timesHtml += '</div>';
+  document.getElementById('reg-times2').innerHTML = timesHtml;
 }
 function saveRegModal(){
   var emp = EMPLOYEES[REG_MODAL_EI];
