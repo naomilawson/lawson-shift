@@ -27,8 +27,8 @@ body{background:var(--bg);color:var(--t1);}
 .layout-sw div{padding:7px 14px;font-size:13px;cursor:pointer;color:var(--t2);}
 .layout-sw div.on{background:var(--t1);color:#fff;}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--bd);margin-bottom:20px;}
-.tab{padding:11px 22px;font-size:15px;font-weight:500;color:var(--t3);cursor:pointer;border-bottom:2px solid transparent;}
-.tab.on{color:var(--t1);border-bottom-color:var(--purple);}
+.tab{padding:11px 22px;font-size:17px;font-weight:500;color:var(--t1);cursor:pointer;border-bottom:2px solid transparent;border-radius:8px 8px 0 0;}
+.tab.on{color:#fff;font-weight:700;background:var(--t1);border-bottom-color:var(--t1);}
 .split{display:none;gap:20px;}
 .split.on{display:flex;}
 .split>div{flex:1;min-width:0;}
@@ -126,6 +126,17 @@ body{background:var(--bg);color:var(--t1);}
     </div>
   </div>
 </div>
+
+<div class="mbg" id="reg-modal">
+  <div class="modal2">
+    <div class="m-ttl" id="reg-modal-ttl">レギュラーシフト設定</div>
+    <div id="reg-days"></div>
+    <div class="m-actions">
+      <button onclick="closeRegModal()">キャンセル</button>
+      <button class="save" onclick="saveRegModal()">保存</button>
+    </div>
+  </div>
+</div>
   <div class="hd">
     <h1>シフト管理（管理者用） ver1.15</h1>
     <div style="display:flex;align-items:center;gap:10px;">
@@ -144,10 +155,8 @@ body{background:var(--bg);color:var(--t1);}
     <div class="tab on" onclick="swMain('create',this)">シフト作成</div>
     <div class="tab" onclick="swMain('sched',this)">スケジュール確認</div>
     <div class="tab" onclick="swMain('emp',this)">従業員設定</div>
-    <div class="tab" onclick="swMain('staffrule',this)">人員設定</div>
     <div class="tab" onclick="swMain('hist',this)">過去シフト</div>
   </div>
-  <div class="single" id="single-staffrule"></div>
 
   <div class="single on" id="single-create"></div>
   <div class="single" id="single-sched"></div>
@@ -160,7 +169,6 @@ body{background:var(--bg);color:var(--t1);}
         <option value="create">シフト作成</option>
         <option value="sched">スケジュール確認</option>
         <option value="emp">従業員設定</option>
-      <option value="staffrule">人員設定</option>
         <option value="hist">過去シフト</option>
       </select>
       <div id="pane-a-content"></div>
@@ -170,7 +178,6 @@ body{background:var(--bg);color:var(--t1);}
         <option value="create">シフト作成</option>
         <option value="sched" selected>スケジュール確認</option>
         <option value="emp">従業員設定</option>
-      <option value="staffrule">人員設定</option>
         <option value="hist">過去シフト</option>
       </select>
       <div id="pane-b-content"></div>
@@ -225,7 +232,8 @@ function fetchEmployees(){
         role: d.role,
         color: d.color,
         constraints: d.constraints || [],
-        active: d.active !== false
+        active: d.active !== false,
+        regularShift: d.regularShift || null
       });
     });
     EMPLOYEES = list;
@@ -1232,17 +1240,76 @@ function saveManualInput(){
   });
 }
 
+// ==== レギュラーシフト設定モーダル（従業員アプリと共通のFirestoreデータ） ====
+var REG_MODAL_EI = null;
+var REG_MODAL_DAYS = null;
+function defaultRegularShift(){
+  var out = [];
+  for (var i=0;i<7;i++) out.push({s:'ok', in:9, out:17});
+  return out;
+}
+function openRegModal(ei){
+  REG_MODAL_EI = ei;
+  var emp = EMPLOYEES[ei];
+  document.getElementById('reg-modal-ttl').textContent = 'レギュラーシフト設定（'+emp.name+'）';
+  REG_MODAL_DAYS = (emp.regularShift && emp.regularShift.length===7)
+    ? JSON.parse(JSON.stringify(emp.regularShift))
+    : defaultRegularShift();
+  document.getElementById('reg-modal').classList.add('open');
+  renderRegModalDays();
+}
+function closeRegModal(){
+  document.getElementById('reg-modal').classList.remove('open');
+}
+function cycleRegModalDay(di){
+  var d = REG_MODAL_DAYS[di];
+  d.s = d.s==='ok' ? 'ng' : d.s==='ng' ? 'tm' : 'ok';
+  if (d.s==='tm' && !d.in){ d.in=9; d.out=17; }
+  renderRegModalDays();
+}
+function setRegModalTime(di, field, val){
+  REG_MODAL_DAYS[di][field] = +val;
+}
+function renderRegModalDays(){
+  var html = '';
+  for (var di=0; di<7; di++){
+    var d = REG_MODAL_DAYS[di];
+    var lbl = d.s==='ok' ? '〇' : d.s==='ng' ? '休' : (d.in+'～'+d.out);
+    html += '<div class="mi-day"><span class="mi-wd">'+WDS[di]+'</span>'
+      + '<span class="mi-toggle '+d.s+'" onclick="cycleRegModalDay('+di+')">'+lbl+'</span>';
+    if (d.s==='tm'){
+      html += '<span class="mi-time"><select onchange="setRegModalTime('+di+',\'in\',this.value)">'+miTimeOpts(d.in)+'</select>〜<select onchange="setRegModalTime('+di+',\'out\',this.value)">'+miTimeOpts(d.out)+'</select></span>';
+    }
+    html += '</div>';
+  }
+  document.getElementById('reg-days').innerHTML = html;
+}
+function saveRegModal(){
+  var emp = EMPLOYEES[REG_MODAL_EI];
+  emp.regularShift = REG_MODAL_DAYS;
+  pendingWrites++;
+  fbDb.collection('employees').doc(emp.name).set({regularShift: emp.regularShift}, {merge:true}).then(function(){
+    showToast('レギュラーシフトを保存しました（'+emp.name+'）');
+    closeRegModal();
+  }).catch(function(err){
+    showFbError('保存に失敗しました（'+emp.name+'）: '+err.message);
+  }).then(function(){
+    pendingWrites--;
+  });
+}
+
 function renderEmpHtml(){
   var html = '<div class="emp-list">';
   EMPLOYEES.forEach(function(e,ei){
     var inactive = e.active===false;
-    html += '<div class="emp-card" style="'+(inactive?'opacity:.5;':'')+'"><div class="emp-head"><span style="display:flex;align-items:center;gap:8px;"><input type="color" value="'+e.color+'" onchange="setColor('+ei+',this.value)" style="width:28px;height:28px;border:none;padding:0;cursor:pointer;"><span class="emp-name">'+e.name+(inactive?'（除外中）':'')+'</span></span>'
+    html += '<div class="emp-card" style="'+(inactive?'opacity:.5;':'')+'"><div class="emp-head"><span style="display:flex;align-items:center;gap:8px;"><input type="color" value="'+e.color+'" onchange="setColor('+ei+',this.value)" style="width:28px;height:28px;border:none;padding:0;cursor:pointer;"><span class="emp-name">'+e.name+(inactive?'（除外中）':'')+'</span><button class="add-con" style="border:1px solid var(--btn-bd);border-radius:6px;padding:2px 8px;font-size:12px;" onclick="renameEmployee('+ei+')" title="氏名を変更">✎ 氏名変更</button></span>'
       + '<span style="display:flex;align-items:center;gap:8px;"><span class="emp-meta">'+(e.role||'')+'</span><select onchange="setStore('+ei+',this.value)" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);color:var(--t1);">'
       + '<option value="honten"'+(e.store==='honten'?' selected':'')+'>本店のみ</option>'
       + '<option value="both"'+(e.store==='both'?' selected':'')+'>兼務可能</option>'
       + '<option value="hospital"'+(e.store==='hospital'?' selected':'')+'>病院のみ</option>'
       + '</select>'
       + '<button class="add-con" style="border:1px solid var(--btn-bd);border-radius:6px;padding:4px 10px;" onclick="toggleActive('+ei+')">'+(inactive?'復帰させる':'除外する（退職等）')+'</button>'
+      + '<button class="add-con" style="border:1px solid var(--btn-bd);border-radius:6px;padding:4px 10px;" onclick="openRegModal('+ei+')">レギュラーシフト設定</button>'
       + '<button class="add-con" style="border:1px solid #d93030;color:#d93030;border-radius:6px;padding:4px 10px;" onclick="deleteEmployee('+ei+')">削除</button>'
       + '</span></div><div>';
     e.constraints.forEach(function(c,ci){
@@ -1306,6 +1373,82 @@ function addCon(ei){
   renderAll();
   syncEmployeeToFirestore(EMPLOYEES[ei].name, {constraints: EMPLOYEES[ei].constraints});
 }
+function renameEmployee(ei){
+  var oldName = EMPLOYEES[ei].name;
+  var newName = prompt('新しい氏名を入力してください', oldName);
+  if(!newName) return;
+  newName = newName.trim();
+  if(!newName || newName===oldName) return;
+  if(EMPLOYEES.some(function(e,i){ return i!==ei && e.name===newName; })){
+    alert('同じ名前の従業員が既にいます');
+    return;
+  }
+  if(!confirm('「'+oldName+'」を「'+newName+'」に変更します。\n過去の希望・下書き・公開済みシフトもすべて置き換わります。よろしいですか？')) return;
+  pushHistory();
+
+  // ローカルデータを一括置換
+  EMPLOYEES[ei].name = newName;
+  DRAFTS.forEach(function(draft){
+    if(!draft) return;
+    ['honten','hospital'].forEach(function(sub){
+      draft[sub].forEach(function(day){
+        day.staff.forEach(function(s){ if(s.n===oldName) s.n = newName; });
+      });
+    });
+  });
+  Object.keys(AVAIL_DATA).forEach(function(weekId){
+    if(AVAIL_DATA[weekId] && AVAIL_DATA[weekId][oldName]){
+      AVAIL_DATA[weekId][newName] = AVAIL_DATA[weekId][oldName];
+      delete AVAIL_DATA[weekId][oldName];
+    }
+  });
+  HISTORY_SHIFTS.forEach(function(h){
+    ['honten','hospital'].forEach(function(sub){
+      (h[sub]||[]).forEach(function(day){
+        (day.staff||[]).forEach(function(s){ if(s.n===oldName) s.n = newName; });
+      });
+    });
+  });
+  renderAll();
+
+  // Firestoreへ反映
+  pendingWrites++;
+  var newData = {name:newName, store:EMPLOYEES[ei].store, role:EMPLOYEES[ei].role, color:EMPLOYEES[ei].color, constraints:EMPLOYEES[ei].constraints, active:EMPLOYEES[ei].active, regularShift:EMPLOYEES[ei].regularShift||null};
+  var tasks = [];
+  tasks.push(fbDb.collection('employees').doc(newName).set(newData));
+  tasks.push(fbDb.collection('employees').doc(oldName).delete());
+
+  // availability（現在表示中の週の範囲のみ。範囲外の古い週データは対象外）
+  allNeededWeekIds().forEach(function(weekId){
+    tasks.push(fbDb.collection('availability').doc(weekId+'_'+oldName).get().then(function(doc){
+      if(!doc.exists) return null;
+      var data = doc.data();
+      return Promise.all([
+        fbDb.collection('availability').doc(weekId+'_'+newName).set(data),
+        fbDb.collection('availability').doc(weekId+'_'+oldName).delete()
+      ]);
+    }));
+  });
+
+  // drafts（シフト作成の表示中の週）
+  WEEKS_CREATE.forEach(function(w, idx){
+    if(DRAFTS[idx]) tasks.push(fbDb.collection('drafts').doc(w.weekId).set(DRAFTS[idx]));
+  });
+
+  // shifts（公開済みシフト全件）
+  HISTORY_SHIFTS.filter(function(h){ return h._fromFirestore; }).forEach(function(h){
+    tasks.push(fbDb.collection('shifts').doc(h.weekId).set({label:h.label, honten:h.honten, hospital:h.hospital}, {merge:true}));
+  });
+
+  Promise.all(tasks).then(function(){
+    showToast('氏名を変更しました（'+oldName+' → '+newName+'）');
+  }).catch(function(err){
+    showFbError('氏名変更の一部処理に失敗しました: '+err.message);
+  }).then(function(){
+    pendingWrites--;
+  });
+}
+
 function deleteEmployee(ei){
   var emp = EMPLOYEES[ei];
   if(!confirm('本当に削除しますか？（'+emp.name+'）\nこの操作は取り消せません。Firestoreのデータも完全に削除されます。')) return;
@@ -1565,8 +1708,7 @@ function adjustMinBoundary(store, idx, edge, delta){
 function renderContent(view){
   if(view==='create') return renderCreatePanelHtml(curWeek);
   if(view==='sched') return renderSchedHtml();
-  if(view==='emp') return renderEmpHtml();
-  if(view==='staffrule') return renderStaffRuleHtml();
+  if(view==='emp') return renderEmpHtml() + '<div style="height:28px;"></div><div style="font-size:16px;font-weight:700;margin-bottom:12px;">人員設定</div>' + renderStaffRuleHtml();
   if(view==='hist') return renderHistHtml();
   return '';
 }
@@ -1605,7 +1747,7 @@ function setLayout(mode, el){
 }
 
 function renderAll(){
-  ['create','sched','emp','staffrule','hist'].forEach(function(v){
+  ['create','sched','emp','hist'].forEach(function(v){
     var el = document.getElementById('single-'+v);
     if(el && el.classList.contains('on')) el.innerHTML = renderContent(v);
   });
