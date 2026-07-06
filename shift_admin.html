@@ -133,7 +133,7 @@ body{background:var(--bg);color:var(--t1);}
 
 <div class="mbg" id="reg-modal" onclick="if(event.target===this)closeRegModal()">
   <div class="modal2">
-    <div class="m-ttl" id="reg-modal-ttl">レギュラーシフト設定</div>
+    <div class="m-ttl" id="reg-modal-ttl">通常シフトパターン設定</div>
     <div id="reg-grid2"></div>
     <div id="reg-times2"></div>
     <div class="m-actions">
@@ -319,7 +319,7 @@ function saveDraftToFirestore(weekIdx){
   if(weekIdx==='pattern'){
     pendingWrites++;
     fbDb.collection('settings').doc('regularPattern').set(REGULAR_PATTERN).catch(function(err){
-      showFbError('レギュラーパターンの保存に失敗しました: '+err.message);
+      showFbError('通常シフトパターンの保存に失敗しました: '+err.message);
     }).then(function(){ pendingWrites--; });
     return;
   }
@@ -1105,7 +1105,7 @@ function renderGanttHtml(weekIdx, sub){
     + '<div class="stab'+(sub==='hospital'?' on':'')+'" onclick="'+swFn+'(\'hospital\')">病院店</div>'
     + '</div>';
   if(!getBoard(weekIdx)){
-    var msg = weekIdx==='pattern' ? 'レギュラーパターンの読み込みに失敗しています。「更新」を押して再取得してください。' : 'まだ下書きがありません。「AIで下書き作成」を押してください。';
+    var msg = weekIdx==='pattern' ? '通常シフトパターンの読み込みに失敗しています。「更新」を押して再取得してください。' : 'まだ下書きがありません。「AIで下書き作成」を押してください。';
     return tabsHtml + '<div style="padding:20px;color:var(--t3);font-size:13px;">'+msg+'</div>';
   }
   var days = getBoard(weekIdx)[sub];
@@ -1358,7 +1358,7 @@ function setHistView(v){ histView = v; renderAll(); }
 function openRegModal(ev, ei){
   REG_MODAL_EI = ei;
   var emp = EMPLOYEES[ei];
-  document.getElementById('reg-modal-ttl').textContent = 'レギュラーシフト設定（'+emp.name+'）';
+  document.getElementById('reg-modal-ttl').textContent = '通常シフトパターン設定（'+emp.name+'）';
   REG_MODAL_DAYS = (emp.regularShift && emp.regularShift.length===7)
     ? JSON.parse(JSON.stringify(emp.regularShift))
     : defaultRegularShift();
@@ -1407,7 +1407,7 @@ function saveRegModal(){
   emp.regularShift = REG_MODAL_DAYS;
   pendingWrites++;
   fbDb.collection('employees').doc(emp.name).set({regularShift: emp.regularShift}, {merge:true}).then(function(){
-    showToast('レギュラーシフトを保存しました（'+emp.name+'）');
+    showToast('通常シフトパターンを保存しました（'+emp.name+'）');
     closeRegModal();
   }).catch(function(err){
     showFbError('保存に失敗しました（'+emp.name+'）: '+err.message);
@@ -1427,7 +1427,7 @@ function renderEmpHtml(){
       + '<option value="hospital"'+(e.store==='hospital'?' selected':'')+'>病院のみ</option>'
       + '</select>'
       + '<button class="add-con" style="border:1px solid var(--btn-bd);border-radius:6px;padding:4px 10px;" onclick="toggleActive('+ei+')">'+(inactive?'復帰させる':'除外する（退職等）')+'</button>'
-      + '<button class="add-con" style="border:1px solid var(--btn-bd);border-radius:6px;padding:4px 10px;" onclick="openRegModal(event,'+ei+')">レギュラーシフト設定</button>'
+      + '<button class="add-con" style="border:1px solid var(--btn-bd);border-radius:6px;padding:4px 10px;" onclick="openRegModal(event,'+ei+')">通常シフトパターン設定</button>'
       + '<button class="add-con" style="border:1px solid #d93030;color:#d93030;border-radius:6px;padding:4px 10px;" onclick="deleteEmployee('+ei+')">削除</button>'
       + '</span></div><div>';
     e.constraints.forEach(function(c,ci){
@@ -1683,7 +1683,7 @@ var curHistorySub = 'honten';
 function renderHistHtml(){
   var switchTabs = '<div class="subtabs" style="margin-bottom:14px;">'
     + '<div class="stab'+(histView==='history'?' on':'')+'" onclick="setHistView(\'history\')">公開履歴</div>'
-    + '<div class="stab'+(histView==='pattern'?' on':'')+'" onclick="setHistView(\'pattern\')">⚙ レギュラーパターン編集</div>'
+    + '<div class="stab'+(histView==='pattern'?' on':'')+'" onclick="setHistView(\'pattern\')">⚙ 通常シフトパターン編集</div>'
     + '</div>';
   if(histView==='pattern'){
     var addBtn = '<div style="margin-bottom:10px;"><button class="ai-btn" style="background:var(--btn);color:var(--t1);border-color:var(--btn-bd);" onclick="addNewSlot(\'pattern\')">+ 新規勤務枠</button></div>';
