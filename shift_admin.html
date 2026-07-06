@@ -142,6 +142,16 @@ body{background:var(--bg);color:var(--t1);}
     </div>
   </div>
 </div>
+
+<div class="mbg" id="pattern-modal" onclick="if(event.target===this)closePatternEditor()">
+  <div class="modal2" style="max-width:900px;">
+    <div class="m-ttl">レギュラーパターン編集（全ての週の基本形として使われます）</div>
+    <div id="pattern-modal-body"></div>
+    <div class="m-actions">
+      <button onclick="closePatternEditor()">閉じる</button>
+    </div>
+  </div>
+</div>
   <div class="hd">
     <h1>シフト管理（管理者用） ver1.15</h1>
     <div style="display:flex;align-items:center;gap:10px;">
@@ -279,6 +289,27 @@ function setRefreshBtnLabel(text){
   document.getElementById('refresh-btn-label').textContent = text;
 }
 
+// ==== レギュラーパターン（シフト作成の基本形。週をまたいで共通・Firestore永続化） ====
+var REGULAR_PATTERN = null;
+function getBoard(weekIdx){
+  return weekIdx==='pattern' ? REGULAR_PATTERN : DRAFTS[weekIdx];
+}
+function buildDefaultPattern(){
+  var honten = WDS.map(function(wd,i){ return {wd:wd, date:'', staff: JSON.parse(JSON.stringify(PATTERN_HONTEN[i]))}; });
+  var hospital = WDS.map(function(wd,i){ return {wd:wd, date:'', staff: JSON.parse(JSON.stringify(PATTERN_HOSPITAL[i]))}; });
+  return {honten:honten, hospital:hospital, violations:[], unplaced:[]};
+}
+function fetchRegularPattern(){
+  return fbDb.collection('settings').doc('regularPattern').get().then(function(doc){
+    if(doc.exists){
+      REGULAR_PATTERN = doc.data();
+    } else {
+      REGULAR_PATTERN = buildDefaultPattern();
+      return fbDb.collection('settings').doc('regularPattern').set(REGULAR_PATTERN);
+    }
+  });
+}
+
 function allNeededWeekIds(){
   var ids = {};
   WEEKS_CREATE.concat(WEEKS_SCHED).forEach(function(w){ ids[w.weekId] = true; });
@@ -294,6 +325,13 @@ function fetchDrafts(){
   return Promise.all(jobs);
 }
 function saveDraftToFirestore(weekIdx){
+  if(weekIdx==='pattern'){
+    pendingWrites++;
+    fbDb.collection('settings').doc('regularPattern').set(REGULAR_PATTERN).catch(function(err){
+      showFbError('レギュラーパターンの保存に失敗しました: '+err.message);
+    }).then(function(){ pendingWrites--; });
+    return;
+  }
   var wk = WEEKS_CREATE[weekIdx];
   if(!wk) return;
   var draft = DRAFTS[weekIdx];
@@ -324,7 +362,7 @@ function refreshAllData(){
   }
   setRefreshBtnLabel('更新中...');
   fetchEmployees().then(function(){
-    return Promise.all([fetchAvailability(allNeededWeekIds()), fetchDrafts(), fetchPublishedShifts()]);
+    return Promise.all([fetchAvailability(allNeededWeekIds()), fetchDrafts(), fetchPublishedShifts(), fetchRegularPattern()]);
   }).then(function(){
     hideFbError();
     UNDO_STACK = [];
@@ -342,7 +380,7 @@ function initApp(){
   fbAuth.signInAnonymously().then(function(){
     return fetchEmployees();
   }).then(function(){
-    return Promise.all([fetchAvailability(allNeededWeekIds()), fetchDrafts(), fetchPublishedShifts()]);
+    return Promise.all([fetchAvailability(allNeededWeekIds()), fetchDrafts(), fetchPublishedShifts(), fetchRegularPattern()]);
   }).then(function(){
     renderAll();
   }).catch(function(err){
@@ -688,17 +726,11 @@ function generateDraft(weekIdx){
     return true;
   }
 
-  // 前週の定義：week0は6/29実データ、week1以降は「直前の週で実際に作った下書き」
-  var usingPrevDraft = weekIdx>0 && DRAFTS[weekIdx-1];
-  if(weekIdx>0 && !usingPrevDraft){
-    notes.push('前週（'+WEEKS_CREATE[weekIdx-1].label+'）の下書きが未作成のため、実績データの基本パターンを使用しました');
-  }
-
   ['honten','hospital'].forEach(function(sub){
     var board = sub==='honten' ? honten : hospital;
     var gST = sub==='hospital' ? 7 : 6, gEN = sub==='hospital' ? 20 : 23;
     for(var di=0; di<7; di++){
-      var srcEntries = usingPrevDraft ? DRAFTS[weekIdx-1][sub][di].staff.filter(function(s){return !s.unassigned;}) : (sub==='honten'?PATTERN_HONTEN:PATTERN_HOSPITAL)[di];
+      var srcEntries = REGULAR_PATTERN[sub][di].staff;
       srcEntries.forEach(function(tpl){
         var emp = empByName(tpl.n);
         var storeOk = emp && (emp.store==='both' || (sub==='honten' && emp.store==='honten') || (sub==='hospital' && emp.store==='hospital'));
@@ -745,9 +777,9 @@ function addNewSlot(weekIdx){
   var inH = Number(m[1]), outH = Number(m[2]);
   var gST = subInput==='hospital'?7:6, gEN = subInput==='hospital'?20:23;
   if(inH<gST || outH>=gEN || outH<=inH){ alert('営業時間（'+gST+'〜'+gEN+'時）の範囲内で入力してください'); return; }
-  if(!DRAFTS[weekIdx]){ alert('先に下書きを作成してください'); return; }
+  if(!getBoard(weekIdx)){ alert('先に下書きを作成してください'); return; }
   pushHistory();
-  DRAFTS[weekIdx][subInput][di].staff.push({n:null, in:inH, out:outH+1, unassigned:true});
+  getBoard(weekIdx)[subInput][di].staff.push({n:null, in:inH, out:outH+1, unassigned:true});
   renderAll();
   saveDraftToFirestore(weekIdx);
 }
@@ -755,9 +787,9 @@ function addNewSlot(weekIdx){
 function moveToOtherStore(weekIdx, sub, day, idx){
   closePopover();
   pushHistory();
-  var fromBoard = DRAFTS[weekIdx][sub];
+  var fromBoard = getBoard(weekIdx)[sub];
   var toSub = sub==='honten' ? 'hospital' : 'honten';
-  var toBoard = DRAFTS[weekIdx][toSub];
+  var toBoard = getBoard(weekIdx)[toSub];
   var entry = fromBoard[day].staff.splice(idx, 1)[0];
   var gEN = toSub==='hospital' ? 20 : 23, gST = toSub==='hospital' ? 7 : 6;
   if(entry.in < gST) entry.in = gST;
@@ -813,7 +845,7 @@ function onBarDrop(ev,weekIdx,sub,day,idx){
   if(!dragSrc) return;
   if(dragSrc.weekIdx!==weekIdx || dragSrc.sub!==sub || dragSrc.day!==day){ dragSrc=null; return; }
   pushHistory();
-  var draft = DRAFTS[weekIdx][sub];
+  var draft = getBoard(weekIdx)[sub];
   var a = draft[day].staff[dragSrc.idx];
   var b = draft[day].staff[idx];
   var tmpN = a.n; a.n = b.n; b.n = tmpN;
@@ -827,7 +859,7 @@ function closePopover(){ var p=document.getElementById('name-popover'); if(p) p.
 
 function adjustBarTime(weekIdx,sub,day,idx,field,delta){
   closePopover();
-  var bar = DRAFTS[weekIdx][sub][day].staff[idx];
+  var bar = getBoard(weekIdx)[sub][day].staff[idx];
   var gEN = sub==='hospital'?20:23, gST = sub==='hospital'?7:6;
   if(field==='in'){
     var newIn = bar.in+delta;
@@ -846,7 +878,7 @@ function adjustBarTime(weekIdx,sub,day,idx,field,delta){
 }
 function shiftBar(weekIdx,sub,day,idx,delta){
   closePopover();
-  var bar = DRAFTS[weekIdx][sub][day].staff[idx];
+  var bar = getBoard(weekIdx)[sub][day].staff[idx];
   var gEN = sub==='hospital'?20:23, gST = sub==='hospital'?7:6;
   var newIn = bar.in+delta, newOut = bar.out+delta;
   if(newIn<gST || newOut>gEN){ alert('営業時間の範囲外になるため移動できません'); return; }
@@ -859,13 +891,14 @@ function shiftBar(weekIdx,sub,day,idx,delta){
 function onBarClick(ev, weekIdx, sub, day, idx){
   ev.stopPropagation();
   closePopover();
-  var draft = DRAFTS[weekIdx][sub];
+  var wkArg = (typeof weekIdx === 'string') ? ('&quot;'+weekIdx+'&quot;') : weekIdx;
+  var draft = getBoard(weekIdx)[sub];
   var bar = draft[day].staff[idx];
   var barEmp = empByName(bar.n);
   var assignedRanges = {};
   ['honten','hospital'].forEach(function(s){
-    if(!DRAFTS[weekIdx][s]) return;
-    DRAFTS[weekIdx][s][day].staff.forEach(function(x){
+    if(!getBoard(weekIdx)[s]) return;
+    getBoard(weekIdx)[s][day].staff.forEach(function(x){
       if(!x.n) return;
       if(!assignedRanges[x.n]) assignedRanges[x.n] = [];
       assignedRanges[x.n].push({in:x.in, out:x.out});
@@ -880,6 +913,7 @@ function onBarClick(ev, weekIdx, sub, day, idx){
       if(e.store!=='both') return false; // 兼務不可の人は同日の二重勤務不可
       if(existing.some(function(r){ return timeOverlaps(r, {in:bar.in, out:bar.out}); })) return false; // 兼務可能でも時間が重なる場合は不可
     }
+    if(weekIdx==='pattern') return true; // レギュラーパターンは日付・希望に紐付かないため常に候補
     var w = parseAvail(getAvail(WEEKS_CREATE[weekIdx].weekId, e.name, day));
     if(w.s==='ng' || w.s==='note') return false;
     var segIn = w.in===null ? -Infinity : w.in;
@@ -893,29 +927,29 @@ function onBarClick(ev, weekIdx, sub, day, idx){
   pop.style.top = (rect.bottom+window.scrollY+4)+'px';
   var html = '';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:12px;gap:8px;">'
-    + '<span>開始 '+bar.in+'時</span><span><button onclick="adjustBarTime('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;in&quot;,-1)" style="width:24px;height:24px;">−</button> <button onclick="adjustBarTime('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;in&quot;,1)" style="width:24px;height:24px;">＋</button></span></div>'
+    + '<span>開始 '+bar.in+'時</span><span><button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;in&quot;,-1)" style="width:24px;height:24px;">−</button> <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;in&quot;,1)" style="width:24px;height:24px;">＋</button></span></div>'
     + '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:12px;gap:8px;">'
-    + '<span>終了 '+bar.out+'時</span><span><button onclick="adjustBarTime('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;out&quot;,-1)" style="width:24px;height:24px;">−</button> <button onclick="adjustBarTime('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;out&quot;,1)" style="width:24px;height:24px;">＋</button></span></div>'
+    + '<span>終了 '+bar.out+'時</span><span><button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;out&quot;,-1)" style="width:24px;height:24px;">−</button> <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;out&quot;,1)" style="width:24px;height:24px;">＋</button></span></div>'
     + '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:12px;gap:8px;">'
-    + '<span>全体を移動</span><span><button onclick="shiftBar('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+',-1)" style="width:24px;height:24px;">◀</button> <button onclick="shiftBar('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+',1)" style="width:24px;height:24px;">▶</button></span></div>'
+    + '<span>全体を移動</span><span><button onclick="shiftBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',-1)" style="width:24px;height:24px;">◀</button> <button onclick="shiftBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',1)" style="width:24px;height:24px;">▶</button></span></div>'
     + '<div style="border-top:0.5px solid var(--bd);margin:4px 0;"></div>';
   if(bar.unassigned){
     html += '<div class="none">'+bar.in+'〜'+bar.out+'時にこの枠へ入れる人を選択</div>';
   } else {
-    html += '<div onclick="setBreak('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+')">休憩を'+(bar.breaks&&bar.breaks.length?'変更':'設定')+'</div>';
+    html += '<div onclick="setBreak('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">休憩を'+(bar.breaks&&bar.breaks.length?'変更':'設定')+'</div>';
     if(bar.breaks && bar.breaks.length){
-      html += '<div onclick="clearBreak('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+')">休憩を解除</div>';
+      html += '<div onclick="clearBreak('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">休憩を解除</div>';
     }
     if(barEmp && barEmp.store==='both'){
-      html += '<div onclick="moveToOtherStore('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+')">'+(sub==='honten'?'病院店に移す':'本店に移す')+'</div>';
+      html += '<div onclick="moveToOtherStore('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">'+(sub==='honten'?'病院店に移す':'本店に移す')+'</div>';
     }
   }
-  html += '<div onclick="deleteBar('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+')" style="color:#d93030;">この勤務枠を削除</div>';
+  html += '<div onclick="deleteBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')" style="color:#d93030;">この勤務枠を削除</div>';
   html += '<div style="border-top:0.5px solid var(--bd);margin:4px 0;"></div>';
   if(candidates.length===0){
     html += '<div class="none">入れる人がいません</div>';
   } else {
-    html += candidates.map(function(c){ return '<div onclick="assignName('+weekIdx+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;'+c.name+'&quot;)">'+c.name+(c.store==='both'?'（兼務可）':'')+(bar.unassigned?'を選択':'に変更')+'</div>'; }).join('');
+    html += candidates.map(function(c){ return '<div onclick="assignName('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;'+c.name+'&quot;)">'+c.name+(c.store==='both'?'（兼務可）':'')+(bar.unassigned?'を選択':'に変更')+'</div>'; }).join('');
   }
   pop.innerHTML = html;
   document.body.appendChild(pop);
@@ -923,7 +957,7 @@ function onBarClick(ev, weekIdx, sub, day, idx){
 }
 function setBreak(weekIdx,sub,day,idx){
   closePopover();
-  var bar = DRAFTS[weekIdx][sub][day].staff[idx];
+  var bar = getBoard(weekIdx)[sub][day].staff[idx];
   var cur = bar.breaks && bar.breaks[0];
   var curStr = cur ? (cur.out-cur.in>1 ? cur.in+'-'+(cur.out-1) : String(cur.in)) : '';
   var input = prompt('休憩の時間帯を入力してください（1コマ=1時間の考え方です）\n例: 11 → 11時台のみ休憩\n例: 11-13 → 11〜13時台まで休憩（3時間）', curStr);
@@ -948,7 +982,7 @@ function setBreak(weekIdx,sub,day,idx){
 function clearBreak(weekIdx,sub,day,idx){
   closePopover();
   pushHistory();
-  delete DRAFTS[weekIdx][sub][day].staff[idx].breaks;
+  delete getBoard(weekIdx)[sub][day].staff[idx].breaks;
   renderAll();
   saveDraftToFirestore(weekIdx);
 }
@@ -956,13 +990,13 @@ function deleteBar(weekIdx,sub,day,idx){
   closePopover();
   if(!confirm('この勤務枠を削除しますか？')) return;
   pushHistory();
-  DRAFTS[weekIdx][sub][day].staff.splice(idx,1);
+  getBoard(weekIdx)[sub][day].staff.splice(idx,1);
   renderAll();
   saveDraftToFirestore(weekIdx);
 }
 function assignName(weekIdx,sub,day,idx,name){
   pushHistory();
-  var bar = DRAFTS[weekIdx][sub][day].staff[idx];
+  var bar = getBoard(weekIdx)[sub][day].staff[idx];
   bar.n = name;
   delete bar.unassigned;
   var emp = empByName(name);
@@ -982,13 +1016,14 @@ var labelMode = 'name'; // 'name' | 'hours'
 function setLabelMode(m){ labelMode = m; renderAll(); }
 
 function buildBarHtml(s, gST, sp, weekIdx, sub, di, idx, isRef){
+  var wkArg = (typeof weekIdx === 'string') ? ('&quot;'+weekIdx+'&quot;') : weekIdx;
   if(s.unassigned){
     var lu=((s.in-gST)/sp*100).toFixed(1), ru=((gST+sp-s.out)/sp*100).toFixed(1);
     var attrsU = 'draggable="true" '
-      + 'ondragstart="onBarDragStart(event,'+weekIdx+',&quot;'+sub+'&quot;,'+di+','+idx+')" '
+      + 'ondragstart="onBarDragStart(event,'+wkArg+',&quot;'+sub+'&quot;,'+di+','+idx+')" '
       + 'ondragover="onBarDragOver(event)" ondragleave="onBarDragLeave(event)" '
-      + 'ondrop="onBarDrop(event,'+weekIdx+',&quot;'+sub+'&quot;,'+di+','+idx+')" '
-      + 'onclick="onBarClick(event,'+weekIdx+',&quot;'+sub+'&quot;,'+di+','+idx+')"';
+      + 'ondrop="onBarDrop(event,'+wkArg+',&quot;'+sub+'&quot;,'+di+','+idx+')" '
+      + 'onclick="onBarClick(event,'+wkArg+',&quot;'+sub+'&quot;,'+di+','+idx+')"';
     return '<div class="g-bar unassigned" '+attrsU+' style="left:'+lu+'%;right:'+ru+'%;"><span class="nm">未設定</span></div>';
   }
   var breaks = (s.breaks||[]).slice().sort(function(a,b){return a.in-b.in;});
@@ -1005,14 +1040,14 @@ function buildBarHtml(s, gST, sp, weekIdx, sub, di, idx, isRef){
   var widestIdx=-1, widestLen=-1;
   segs.forEach(function(seg,i){ if(!seg.brk){ var len=seg.out-seg.in; if(len>widestLen){widestLen=len;widestIdx=i;} } });
   var attrs = isRef ? (
-    'onclick="onBarClick(event,'+weekIdx+',&quot;hospital&quot;,'+di+','+idx+')" '
+    'onclick="onBarClick(event,'+wkArg+',&quot;hospital&quot;,'+di+','+idx+')" '
     + 'style="cursor:pointer;'
   ) : (
     'draggable="true" '
-    + 'ondragstart="onBarDragStart(event,'+weekIdx+',&quot;'+sub+'&quot;,'+di+','+idx+')" '
+    + 'ondragstart="onBarDragStart(event,'+wkArg+',&quot;'+sub+'&quot;,'+di+','+idx+')" '
     + 'ondragover="onBarDragOver(event)" ondragleave="onBarDragLeave(event)" '
-    + 'ondrop="onBarDrop(event,'+weekIdx+',&quot;'+sub+'&quot;,'+di+','+idx+')" '
-    + 'onclick="onBarClick(event,'+weekIdx+',&quot;'+sub+'&quot;,'+di+','+idx+')" '
+    + 'ondrop="onBarDrop(event,'+wkArg+',&quot;'+sub+'&quot;,'+di+','+idx+')" '
+    + 'onclick="onBarClick(event,'+wkArg+',&quot;'+sub+'&quot;,'+di+','+idx+')" '
     + 'style="'
   );
   var html='';
@@ -1034,8 +1069,8 @@ function buildBarHtml(s, gST, sp, weekIdx, sub, di, idx, isRef){
 function computeWeeklyHours(weekIdx){
   var totals = {};
   ['honten','hospital'].forEach(function(sub){
-    if(!DRAFTS[weekIdx]) return;
-    DRAFTS[weekIdx][sub].forEach(function(day){
+    if(!getBoard(weekIdx)) return;
+    getBoard(weekIdx)[sub].forEach(function(day){
       day.staff.forEach(function(s){
         if(!s.n) return;
         totals[s.n] = (totals[s.n]||0) + segDur(s);
@@ -1046,12 +1081,13 @@ function computeWeeklyHours(weekIdx){
 }
 
 function renderGanttHtml(weekIdx, sub){
+  var swFn = weekIdx==='pattern' ? 'swPatternSub' : 'swSub';
   var tabsHtml = '<div class="subtabs">'
-    + '<div class="stab'+(sub==='honten'?' on':'')+'" onclick="swSub(\'honten\')">本店</div>'
-    + '<div class="stab'+(sub==='hospital'?' on':'')+'" onclick="swSub(\'hospital\')">病院店</div>'
+    + '<div class="stab'+(sub==='honten'?' on':'')+'" onclick="'+swFn+'(\'honten\')">本店</div>'
+    + '<div class="stab'+(sub==='hospital'?' on':'')+'" onclick="'+swFn+'(\'hospital\')">病院店</div>'
     + '</div>';
-  if(!DRAFTS[weekIdx]) return tabsHtml + '<div style="padding:20px;color:var(--t3);font-size:13px;">まだ下書きがありません。「AIで下書き作成」を押してください。</div>';
-  var days = DRAFTS[weekIdx][sub];
+  if(!getBoard(weekIdx)) return tabsHtml + '<div style="padding:20px;color:var(--t3);font-size:13px;">まだ下書きがありません。「AIで下書き作成」を押してください。</div>';
+  var days = getBoard(weekIdx)[sub];
   var gST = sub==='hospital'?7:6, gEN = sub==='hospital'?20:23;
   var sp = gEN-gST;
   var bg = makeStripes(gST,gEN);
@@ -1068,8 +1104,8 @@ function renderGanttHtml(weekIdx, sub){
     }
     html += '<div class="g-bar-row"><div class="g-row-lbl" style="height:20px;font-size:0;"></div><div class="g-track" style="height:20px;">'+bg+makeTicks(gST,gEN,understaffed)+'</div></div>';
     var comboList = day.staff.map(function(s,i){ var c=Object.assign({},s); c._idx=i; c._ref=false; return c; });
-    if(sub==='honten' && DRAFTS[weekIdx].hospital){
-      DRAFTS[weekIdx].hospital[di].staff.forEach(function(x, hIdx){
+    if(sub==='honten' && getBoard(weekIdx).hospital){
+      getBoard(weekIdx).hospital[di].staff.forEach(function(x, hIdx){
         if(x.dual) comboList.push(Object.assign({}, x, {_idx:hIdx, _ref:true}));
       });
     }
@@ -1138,7 +1174,7 @@ function isWeekPublished(label){
 
 function renderSchedHtml(){
   var names = EMPLOYEES.filter(function(e){ return e.active!==false; }).map(function(e){ return e.name; });
-  var html = '<div style="margin-bottom:10px;"><button class="ai-btn" onclick="openManualInput()">✎ 手動入力</button></div>';
+  var html = '<div style="margin-bottom:10px;"><button class="ai-btn" onclick="openManualInput(event)">✎ 手動入力</button></div>';
   html += '<div class="sched-wrap" style="overflow-x:auto;"><table class="sched-tbl"><tr><th>日付</th>';
   names.forEach(function(n){ html += '<th>'+n+'</th>'; });
   html += '</tr>';
@@ -1171,13 +1207,35 @@ function miTimeOpts(val){
   return s;
 }
 
-function openManualInput(){
+function positionModalNearTrigger(modalId, ev){
+  var modal = document.getElementById(modalId);
+  var pane = ev && ev.target && ev.target.closest ? ev.target.closest('#pane-a-content, #pane-b-content') : null;
+  if(pane){
+    var r = pane.getBoundingClientRect();
+    modal.style.left = r.left+'px';
+    modal.style.top = r.top+'px';
+    modal.style.width = r.width+'px';
+    modal.style.height = r.height+'px';
+    modal.style.right = 'auto';
+    modal.style.bottom = 'auto';
+  } else {
+    modal.style.left = '';
+    modal.style.top = '';
+    modal.style.width = '';
+    modal.style.height = '';
+    modal.style.right = '';
+    modal.style.bottom = '';
+  }
+}
+
+function openManualInput(ev){
   var names = EMPLOYEES.filter(function(e){ return e.active!==false; }).map(function(e){ return e.name; });
   var nameSel = document.getElementById('mi-name-select');
   nameSel.innerHTML = names.map(function(n){ return '<option value="'+n+'">'+n+'</option>'; }).join('');
   var weekSel = document.getElementById('mi-week-select');
   weekSel.innerHTML = WEEKS_SCHED.map(function(w){ return '<option value="'+w.weekId+'">'+w.label+'</option>'; }).join('');
   document.getElementById('manual-input-modal').classList.add('open');
+  positionModalNearTrigger('manual-input-modal', ev);
   onManualSelectChange();
 }
 function closeManualInput(){
@@ -1263,13 +1321,29 @@ function defaultRegularShift(){
   for (var i=0;i<7;i++) out.push({s:'ok', in:9, out:17});
   return out;
 }
-function openRegModal(ei){
+// ==== レギュラーパターン編集モーダル ====
+var patternSub = 'honten';
+function swPatternSub(s){ patternSub = s; renderPatternEditor(); }
+function renderPatternEditor(){
+  document.getElementById('pattern-modal-body').innerHTML = renderGanttHtml('pattern', patternSub);
+}
+function openPatternEditor(ev){
+  document.getElementById('pattern-modal').classList.add('open');
+  positionModalNearTrigger('pattern-modal', ev);
+  renderPatternEditor();
+}
+function closePatternEditor(){
+  document.getElementById('pattern-modal').classList.remove('open');
+}
+
+function openRegModal(ev, ei){
   REG_MODAL_EI = ei;
   var emp = EMPLOYEES[ei];
   document.getElementById('reg-modal-ttl').textContent = 'レギュラーシフト設定（'+emp.name+'）';
   REG_MODAL_DAYS = (emp.regularShift && emp.regularShift.length===7)
     ? JSON.parse(JSON.stringify(emp.regularShift))
     : defaultRegularShift();
+  positionModalNearTrigger('reg-modal', ev);
   document.getElementById('reg-modal').classList.add('open');
   renderRegModalDays();
 }
@@ -1334,7 +1408,7 @@ function renderEmpHtml(){
       + '<option value="hospital"'+(e.store==='hospital'?' selected':'')+'>病院のみ</option>'
       + '</select>'
       + '<button class="add-con" style="border:1px solid var(--btn-bd);border-radius:6px;padding:4px 10px;" onclick="toggleActive('+ei+')">'+(inactive?'復帰させる':'除外する（退職等）')+'</button>'
-      + '<button class="add-con" style="border:1px solid var(--btn-bd);border-radius:6px;padding:4px 10px;" onclick="openRegModal('+ei+')">レギュラーシフト設定</button>'
+      + '<button class="add-con" style="border:1px solid var(--btn-bd);border-radius:6px;padding:4px 10px;" onclick="openRegModal(event,'+ei+')">レギュラーシフト設定</button>'
       + '<button class="add-con" style="border:1px solid #d93030;color:#d93030;border-radius:6px;padding:4px 10px;" onclick="deleteEmployee('+ei+')">削除</button>'
       + '</span></div><div>';
     e.constraints.forEach(function(c,ci){
@@ -1588,8 +1662,9 @@ var curHistoryIdx = 0;
 var curHistorySub = 'honten';
 
 function renderHistHtml(){
-  if(HISTORY_SHIFTS.length===0) return '<div style="padding:20px;color:var(--t3);font-size:13px;">まだ公開履歴がありません。</div>';
-  var html = '<select class="week-tab" onchange="setHistory(this.value)" style="margin-bottom:10px;">';
+  var patternBtn = '<div style="margin-bottom:14px;"><button class="ai-btn" onclick="openPatternEditor(event)">⚙ レギュラーパターンを編集</button></div>';
+  if(HISTORY_SHIFTS.length===0) return patternBtn + '<div style="padding:20px;color:var(--t3);font-size:13px;">まだ公開履歴がありません。</div>';
+  var html = patternBtn + '<select class="week-tab" onchange="setHistory(this.value)" style="margin-bottom:10px;">';
   HISTORY_SHIFTS.forEach(function(h,i){ html += '<option value="'+i+'"'+(i===curHistoryIdx?' selected':'')+'>'+h.label+'</option>'; });
   html += '</select>';
   html += '<div class="subtabs">'
@@ -1778,6 +1853,9 @@ function renderAll(){
   });
   document.getElementById('pane-a-content').innerHTML = renderContent(paneA);
   document.getElementById('pane-b-content').innerHTML = renderContent(paneB);
+  if(document.getElementById('pattern-modal').classList.contains('open')){
+    renderPatternEditor();
+  }
 }
 
 initApp();
