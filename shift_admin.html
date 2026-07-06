@@ -144,7 +144,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.17</h1>
+    <h1>シフト管理（管理者用） ver1.18</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -1659,7 +1659,8 @@ function renderHistHtml(){
     + '<div class="stab'+(histView==='pattern'?' on':'')+'" onclick="setHistView(\'pattern\')">⚙ レギュラーパターン編集</div>'
     + '</div>';
   if(histView==='pattern'){
-    return switchTabs + renderGanttHtml('pattern', patternSub);
+    var addBtn = '<div style="margin-bottom:10px;"><button class="ai-btn" style="background:var(--btn);color:var(--t1);border-color:var(--btn-bd);" onclick="addNewSlot(\'pattern\')">+ 新規勤務枠</button></div>';
+    return switchTabs + addBtn + renderGanttHtml('pattern', patternSub);
   }
   if(HISTORY_SHIFTS.length===0) return switchTabs + '<div style="padding:20px;color:var(--t3);font-size:13px;">まだ公開履歴がありません。</div>';
   var html = switchTabs + '<select class="week-tab" onchange="setHistory(this.value)" style="margin-bottom:10px;">';
