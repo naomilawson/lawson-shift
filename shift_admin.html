@@ -148,7 +148,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.23</h1>
+    <h1>シフト管理（管理者用） ver1.24</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -947,13 +947,13 @@ function buildBarPopoverHtml(weekIdx, sub, day, idx){
     return segIn<=bar.in && segOut>=bar.out;
   });
   var html = '';
+  html += '<div style="display:flex;justify-content:flex-end;margin-bottom:2px;">'
+    + '<button onclick="closePopover()" style="font-size:12px;padding:4px 12px;">決定</button></div>';
   html += '<div class="pop-row"><span>開始</span><span>'+bar.in+'時 <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;in&quot;,-1)" style="width:22px;height:22px;">−</button> <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;in&quot;,1)" style="width:22px;height:22px;">＋</button></span>'
     + '<span>終了</span><span>'+bar.out+'時 <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;out&quot;,-1)" style="width:22px;height:22px;">−</button> <button onclick="adjustBarTime('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',&quot;out&quot;,1)" style="width:22px;height:22px;">＋</button></span></div>'
     + '<div class="pop-row"><span>全体を移動</span><span><button onclick="shiftBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',-1)" style="width:22px;height:22px;">◀</button> <button onclick="shiftBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+',1)" style="width:22px;height:22px;">▶</button></span></div>'
     + '<div style="border-top:0.5px solid var(--bd);margin:4px 0;"></div>';
-  if(bar.unassigned){
-    html += '<div class="none">'+bar.in+'〜'+bar.out+'時にこの枠へ入れる人を選択</div>';
-  } else {
+  if(!bar.unassigned){
     html += '<div class="pop-chips" style="margin-bottom:4px;">'
       + '<div class="pop-chip" onclick="setBreak('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')">休憩を'+(bar.breaks&&bar.breaks.length?'変更':'設定')+'</div>';
     if(bar.breaks && bar.breaks.length){
@@ -964,6 +964,8 @@ function buildBarPopoverHtml(weekIdx, sub, day, idx){
     }
     html += '<div class="pop-chip" onclick="deleteBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')" style="color:#d93030;">削除</div>'
       + '</div>';
+  } else {
+    html += '<div class="pop-chips" style="margin-bottom:4px;"><div class="pop-chip" onclick="deleteBar('+wkArg+',&quot;'+sub+'&quot;,'+day+','+idx+')" style="color:#d93030;">この枠を削除</div></div>';
   }
   html += '<div style="border-top:0.5px solid var(--bd);margin:4px 0;"></div>';
   if(candidates.length===0){
@@ -1002,7 +1004,9 @@ function buildEmergencyPopoverHtml(weekIdx, sub, day, idx){
     }
     return true; // 希望との一致は問わない
   });
-  var html = '<div style="padding:2px 2px 6px;font-size:12px;color:var(--t2);">⚠ 希望と一致しない人も含めて表示しています</div>';
+  var html = '<div style="display:flex;justify-content:flex-end;margin-bottom:2px;">'
+    + '<button onclick="closePopover()" style="font-size:12px;padding:4px 12px;">決定</button></div>'
+    + '<div style="padding:2px 2px 6px;font-size:12px;color:var(--t2);">⚠ 希望と一致しない人も含めて表示しています</div>';
   if(others.length===0){
     html += '<div class="none">選べる人がいません</div>';
   } else {
