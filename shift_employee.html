@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="color-scheme" content="light">
-<title>シフト管理 ver1.46</title>
+<title>シフト管理 ver1.48</title>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
@@ -33,6 +33,8 @@ body.dk{
   --tm-d:#06101e;--tm-db:#00d8ff;--tm-dt:#00d8ff;
 }
 body{background:var(--bg);color:var(--t1);}
+.brk-stripe{background:repeating-linear-gradient(45deg,#fff,#fff 5px,#a8dfa8 5px,#a8dfa8 10px);border:0.5px solid #7cc07c;}
+body.dk .brk-stripe{background:repeating-linear-gradient(45deg,#1a1a1a,#1a1a1a 5px,#2f6a3a 5px,#2f6a3a 10px);border-color:#3a7a4a;}
 .app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
 .hd{background:var(--hd);border-bottom:1px solid var(--hd-bd);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .hd-l{display:flex;align-items:center;gap:9px;}
@@ -173,7 +175,7 @@ body.dk .s-me{background:#1e1e08;}
   <div class="hd">
     <div class="hd-l" id="hd-debug-switch" style="cursor:pointer;">
       <div class="av" id="hd-avatar">?</div>
-      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.46</div></div>
+      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.48</div></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <button id="refresh-btn" class="gear-btn" onclick="refreshAllData()"><span id="refresh-btn-icon">⟳</span> <span id="refresh-btn-label">更新</span></button>
@@ -195,10 +197,11 @@ body.dk .s-me{background:#1e1e08;}
     <div class="subtabs">
       <div class="stab on" onclick="swSub('honten',this)">本店</div>
       <div class="stab" onclick="swSub('hospital',this)">病院店</div>
-      <div class="stab" onclick="swSub('my',this)">自分の出勤</div>
+      <div class="stab" onclick="swSub('my',this)">MY出勤</div>
     </div>
     <div class="gantt-outer"><div class="gantt-inner" id="gantt-inner"></div></div>
     <div id="my-total-hours" style="display:none;font-size:13px;font-weight:600;color:var(--t1);text-align:right;padding:8px 4px;"></div>
+    <div id="my-legend" style="display:none;font-size:12px;color:var(--t2);text-align:right;padding:0 4px 8px;"><span style="display:inline-block;width:10px;height:10px;background:#2a9e52;border-radius:2px;vertical-align:-1px;margin-right:3px;"></span>本店　<span style="display:inline-block;width:10px;height:10px;background:#ffa000;border-radius:2px;vertical-align:-1px;margin-right:3px;margin-left:8px;"></span>病院店</div>
   </div>
 </div>
 
@@ -604,9 +607,12 @@ function decorateDay(day){
 function buildMyDay(hontenWeek, hospWeek){
   return hontenWeek.map(function(hday, di){
     var hoDay = hospWeek[di];
-    var mine = (hday.staff||[]).filter(function(s){return s.n===MY_N;})[0]
-      || (hoDay.staff||[]).filter(function(s){return s.n===MY_N;})[0];
-    if (mine) return {wd:hday.wd, date:hday.date, me:1, in:mine.in, out:mine.out, breaks:mine.breaks};
+    var mineH = (hday.staff||[]).filter(function(s){return s.n===MY_N;})[0];
+    var mineP = (hoDay.staff||[]).filter(function(s){return s.n===MY_N;})[0];
+    var shifts = [];
+    if (mineH) shifts.push({store:'honten', in:mineH.in, out:mineH.out, breaks:mineH.breaks});
+    if (mineP) shifts.push({store:'hospital', in:mineP.in, out:mineP.out, breaks:mineP.breaks});
+    if (shifts.length) return {wd:hday.wd, date:hday.date, me:1, shifts:shifts};
     return {wd:hday.wd, date:hday.date, me:0};
   });
 }
@@ -702,7 +708,7 @@ function makeBar(s, gST, gEN, isBoth, prevCol) {
     var l = ((seg.in-gST)/sp*100).toFixed(1);
     var r = ((gEN-seg.out)/sp*100).toFixed(1);
     if (seg.brk) {
-      html += '<div style="position:absolute;top:0;bottom:0;left:'+l+'%;right:'+r+'%;background:repeating-linear-gradient(45deg,#fff,#fff 3px,#a8dfa8 3px,#a8dfa8 6px);border:0.5px solid #7cc07c;pointer-events:none;"></div>';
+      html += '<div class="brk-stripe" style="position:absolute;top:0;bottom:0;left:'+l+'%;right:'+r+'%;pointer-events:none;"></div>';
     } else {
       var label = i === widestIdx ? s.n : '';
       html += '<div class="g-bar'+(s.me?' me':'')+'" style="left:'+l+'%;right:'+r+'%;background:'+col+'">'+label+'</div>';
@@ -713,38 +719,39 @@ function makeBar(s, gST, gEN, isBoth, prevCol) {
 
 function makeMyBar(day, gST, gEN) {
   var sp = gEN - gST;
-  var breaks = (day.breaks || []).slice().sort(function(a,b){return a.in-b.in;});
-  var segs = [];
-  var cur = day.in;
-  for (var i = 0; i < breaks.length; i++) {
-    if (breaks[i].in > cur) segs.push({in:cur, out:breaks[i].in, brk:false});
-    segs.push({in:breaks[i].in, out:breaks[i].out, brk:true});
-    cur = breaks[i].out;
-  }
-  if (cur < day.out) segs.push({in:cur, out:day.out, brk:false});
   var html = '';
-  if (segs.length === 1) {
-    var dur = segs[0].out - segs[0].in;
-    var l = ((segs[0].in-gST)/sp*100).toFixed(1);
-    var r = ((gEN-segs[0].out)/sp*100).toFixed(1);
-    if (dur === 1) {
-      html += '<div class="g-bar me" style="left:'+l+'%;right:'+r+'%;background:#2a9e52">1</div>';
-    } else {
-      html += '<div class="g-bar me my-fit" data-short="'+dur+'" style="left:'+l+'%;right:'+r+'%;background:#2a9e52">'+dur+'時間</div>';
+  (day.shifts || []).forEach(function(shift){
+    var storeCol = shift.store === 'hospital' ? '#ffa000' : '#2a9e52';
+    var breaks = (shift.breaks || []).slice().sort(function(a,b){return a.in-b.in;});
+    var segs = [];
+    var cur = shift.in;
+    for (var i = 0; i < breaks.length; i++) {
+      if (breaks[i].in > cur) segs.push({in:cur, out:breaks[i].in, brk:false});
+      segs.push({in:breaks[i].in, out:breaks[i].out, brk:true});
+      cur = breaks[i].out;
     }
-  } else {
-    for (var i = 0; i < segs.length; i++) {
-      var s = segs[i];
-      var dur = s.out - s.in;
-      var l = ((s.in-gST)/sp*100).toFixed(1);
-      var r = ((gEN-s.out)/sp*100).toFixed(1);
-      if (s.brk) {
-        html += '<div class="g-bar me" style="left:'+l+'%;right:'+r+'%;background:repeating-linear-gradient(45deg,#fff,#fff 3px,#a8dfa8 3px,#a8dfa8 6px);border:0.5px solid #7cc07c;"></div>';
-      } else {
-        html += '<div class="g-bar me" style="left:'+l+'%;right:'+r+'%;background:#2a9e52;color:#fff">'+dur+'</div>';
+    if (cur < shift.out) segs.push({in:cur, out:shift.out, brk:false});
+    if (segs.length === 1) {
+      var dur = segs[0].out - segs[0].in;
+      var l = ((segs[0].in-gST)/sp*100).toFixed(1);
+      var r = ((gEN-segs[0].out)/sp*100).toFixed(1);
+      var label = dur === 1 ? '1' : (dur+'時間');
+      html += '<div class="g-bar me my-fit" data-short="'+dur+'" style="left:'+l+'%;right:'+r+'%;background:'+storeCol+'">'+label+'</div>';
+    } else {
+      for (var i = 0; i < segs.length; i++) {
+        var s = segs[i];
+        var dur = s.out - s.in;
+        var l = ((s.in-gST)/sp*100).toFixed(1);
+        var r = ((gEN-s.out)/sp*100).toFixed(1);
+        if (s.brk) {
+          html += '<div class="g-bar me brk-stripe" style="left:'+l+'%;right:'+r+'%;"></div>';
+        } else {
+          var label = dur === 1 ? '1' : (dur+'時間');
+          html += '<div class="g-bar me my-fit" data-short="'+dur+'" style="left:'+l+'%;right:'+r+'%;background:'+storeCol+';color:#fff">'+label+'</div>';
+        }
       }
     }
-  }
+  });
   return html;
 }
 
@@ -782,7 +789,7 @@ function renderGantt(sub) {
     var wdLabel = '<div style="font-size:17px;font-weight:700;line-height:1;" class="'+wc+'">'+day.wd+'</div>';
     if (isMy) {
       var bar = '';
-      if (day.me && day.in) { bar = makeMyBar(day, gST, gEN); }
+      if (day.me && day.shifts && day.shifts.length) { bar = makeMyBar(day, gST, gEN); }
       html += '<div class="g-bar-row"><div class="g-row-lbl" style="flex-direction:column;display:flex;align-items:center;justify-content:space-between;padding:3px 0;height:39px;">'+dateLabel+wdLabel+'</div><div class="g-track" style="height:39px;">'+bg+bar+'</div></div>';
     } else if (isHosp) {
       var prows = packRows(day.staff || []);
@@ -822,19 +829,26 @@ function renderGantt(sub) {
     fitMyBars();
     document.getElementById('my-total-hours').style.display = 'block';
     document.getElementById('my-total-hours').textContent = '今週の合計勤務時間：' + computeMyWeekTotalHours(days) + '時間';
+    document.getElementById('my-legend').style.display = hasDualStoreShift(days) ? 'block' : 'none';
   } else {
     document.getElementById('my-total-hours').style.display = 'none';
+    document.getElementById('my-legend').style.display = 'none';
   }
 }
 function computeMyWeekTotalHours(days) {
   var total = 0;
   days.forEach(function(day) {
-    if (!day.me || !day.in) return;
-    var hours = day.out - day.in;
-    (day.breaks || []).forEach(function(b) { hours -= (b.out - b.in); });
-    total += hours;
+    if (!day.me || !day.shifts) return;
+    day.shifts.forEach(function(shift){
+      var hours = shift.out - shift.in;
+      (shift.breaks || []).forEach(function(b) { hours -= (b.out - b.in); });
+      total += hours;
+    });
   });
   return total;
+}
+function hasDualStoreShift(days) {
+  return days.some(function(day){ return day.me && day.shifts && day.shifts.some(function(s){return s.store==='hospital';}); });
 }
 
 // ===== レギュラー設定 =====
