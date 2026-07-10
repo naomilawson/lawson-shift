@@ -45,8 +45,9 @@ body{background:var(--bg);color:var(--t1);}
 .ai-status{font-size:12px;color:var(--t3);}
 .ai-btn{background:var(--purple-bg);color:#5c3dc8;border:2px solid var(--purple);border-radius:7px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;}
 .ai-btn:hover{opacity:.9;}
-.publish-row{margin-top:14px;}
-.publish-btn{width:100%;padding:11px;background:var(--btn);color:var(--t3);border:1px solid var(--btn-bd);border-radius:8px;font-size:13px;cursor:not-allowed;}
+.publish-row{margin-top:14px;display:flex;gap:8px;align-items:stretch;}
+.publish-row .print-btn{padding:12px 20px;font-size:15px;flex:1;}
+.publish-btn{flex:1;padding:16px;background:var(--btn);color:var(--t3);border:2px solid var(--btn-bd);border-radius:8px;font-size:15px;font-weight:700;cursor:not-allowed;}
 .publish-btn.ready{background:var(--ok-d);color:var(--ok-dt);border-color:var(--ok-db);cursor:pointer;}
 .legend{font-size:11px;color:var(--t3);margin:8px 0 4px;}
 .gantt-outer{overflow-x:auto;border:1px solid var(--bd);border-radius:6px;background:var(--card);}
@@ -148,7 +149,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.27</h1>
+    <h1>シフト管理（管理者用） ver1.33</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -1277,7 +1278,7 @@ function renderCreatePanelHtml(weekIdx){
     html += '<div style="font-size:12px;color:#9a1818;background:#fdeaea;border:1px solid #f3c6c6;border-radius:6px;padding:8px 10px;margin-bottom:10px;">赤く点滅している枠は前週と今週のスケジュールが合わないため未設定です。バーをクリックして人を選んでください。</div>';
   }
   html += renderGanttHtml(curWeek, curSub);
-  html += '<div class="publish-row"><button class="publish-btn'+(draft?' ready':'')+'" '+(draft?'onclick="onPublish()"':'disabled')+'>'+(draft?'このシフトを公開する':'公開する（下書き作成後に有効化）')+'</button></div>';
+  html += '<div class="publish-row"><button class="ai-btn print-btn" '+(draft?'':'disabled')+' onclick="onPrintDraft()">🖨 印刷用に開く</button><button class="publish-btn'+(draft?' ready':'')+'" '+(draft?'onclick="onPublish()"':'disabled')+'>'+(draft?'このシフトを公開する':'公開する（下書き作成後に有効化）')+'</button></div>';
   return html;
 }
 
@@ -1796,7 +1797,7 @@ function renderHistHtml(){
   if(HISTORY_SHIFTS.length===0) return switchTabs + '<div style="padding:20px;color:var(--t3);font-size:13px;">まだ公開履歴がありません。</div>';
   var html = switchTabs + '<select class="week-tab" onchange="setHistory(this.value)" style="margin-bottom:10px;">';
   HISTORY_SHIFTS.forEach(function(h,i){ html += '<option value="'+i+'"'+(i===curHistoryIdx?' selected':'')+'>'+h.label+'</option>'; });
-  html += '</select>';
+  html += '</select> <button class="ai-btn" onclick="onPrintHistory()" style="margin-bottom:10px;">🖨 印刷用に開く</button>';
   html += '<div class="subtabs">'
     + '<div class="stab'+(curHistorySub==='honten'?' on':'')+'" onclick="setHistorySub(\'honten\')">本店</div>'
     + '<div class="stab'+(curHistorySub==='hospital'?' on':'')+'" onclick="setHistorySub(\'hospital\')">病院店</div>'
@@ -1818,10 +1819,23 @@ function renderHistHtml(){
       var lbl = r===0 ? ('<div style="font-size:11px;font-weight:600;" class="'+wc+'">'+day.date+'</div><div style="font-size:14px;font-weight:700;" class="'+wc+'">'+day.wd+'</div>') : '';
       html += '<div class="g-bar-row"><div class="g-row-lbl" style="flex-direction:column;'+(rowsAll.length===1?'justify-content:space-between;padding:2px 0;':'')+'">'+lbl+'</div><div class="g-track">';
       row.forEach(function(s){
-        var l=((s.in-gST)/sp*100).toFixed(1), rr=((gEN-s.out)/sp*100).toFixed(1);
+        var breaks = (s.breaks||[]).slice().sort(function(a,b){return a.in-b.in;});
+        var segs = [], cur = s.in;
+        breaks.forEach(function(b){
+          if(b.in>cur) segs.push({in:cur,out:b.in,brk:false});
+          segs.push({in:b.in,out:b.out,brk:true});
+          cur=b.out;
+        });
+        if(cur<s.out) segs.push({in:cur,out:s.out,brk:false});
         var col = empColor(s.n);
-        var border = '';
-        html += '<div class="g-bar" style="left:'+l+'%;right:'+rr+'%;background:'+col+';'+border+'"><span class="nm">'+s.n+'</span></div>';
+        segs.forEach(function(seg){
+          var l=((seg.in-gST)/sp*100).toFixed(1), rr=((gEN-seg.out)/sp*100).toFixed(1);
+          if(seg.brk){
+            html += '<div class="g-bar" style="left:'+l+'%;right:'+rr+'%;background:#c9f7c9;border-radius:0;"></div>';
+          } else {
+            html += '<div class="g-bar" style="left:'+l+'%;right:'+rr+'%;background:'+col+';"><span class="nm">'+s.n+'</span></div>';
+          }
+        });
       });
       html += '</div></div>';
     });
@@ -1846,6 +1860,157 @@ function renderHistHtml(){
 }
 function setHistory(i){ curHistoryIdx = Number(i); renderAll(); }
 function setHistorySub(s){ curHistorySub = s; renderAll(); }
+
+// ==== 印刷用ページ生成（本店・病院店それぞれ1枚のA4） ====
+function printPackRows(staff){
+  var rows = [];
+  var sorted = staff.slice().sort(function(a,b){return a.in-b.in;});
+  for (var i=0;i<sorted.length;i++){
+    var s = sorted[i], placed=false;
+    for (var r=0;r<rows.length;r++){
+      if (rows[r][rows[r].length-1].out <= s.in){ rows[r].push(s); placed=true; break; }
+    }
+    if (!placed) rows.push([s]);
+  }
+  return rows;
+}
+function printMakeTicks(gST,gEN){
+  var sp = gEN-gST, h='';
+  for (var t=gST; t<gEN; t++){
+    var l = ((t-gST+0.5)/sp*100).toFixed(2);
+    h += '<span style="left:'+l+'%">'+t+'</span>';
+  }
+  return h;
+}
+function printMakeZebraGradient(gST,gEN){
+  var sp = gEN-gST;
+  var stopW = 100/sp;
+  var stops = [];
+  for (var i=0;i<sp;i++){
+    var hour = gST+i;
+    var col = hour%2===0 ? '#eeeeee' : '#ffffff';
+    var from = (i*stopW).toFixed(4), to = ((i+1)*stopW).toFixed(4);
+    stops.push(col+' '+from+'%', col+' '+to+'%');
+  }
+  return 'linear-gradient(to right, '+stops.join(',')+')';
+}
+function printRenderStorePage(title, days, gST, gEN, weekLabel, refDays){
+  var sp = gEN-gST;
+  var grad = printMakeZebraGradient(gST,gEN);
+  function ownStaff(day){ return (day.staff||[]).filter(function(s){ return s.n && !s.unassigned; }); }
+  function refStaff(di){
+    if(!refDays || !refDays[di]) return [];
+    return (refDays[di].staff||[]).filter(function(s){ return s.n && s.dual; }).map(function(s){ return Object.assign({}, s, {_ref:true}); });
+  }
+  var rowCountsPerDay = days.map(function(day, di){
+    var own = printPackRows(ownStaff(day)).length;
+    var ref = printPackRows(refStaff(di)).length;
+    return Math.max(1, own+ref);
+  });
+
+  var html = '<div class="page-hd"><h1>週間シフト表</h1><div class="sub">'+weekLabel+'</div></div>';
+  html += '<div class="store-block">';
+  html += '<div class="store-ttl">'+title+'</div>';
+  if(refDays){
+    html += '<div style="font-size:8pt;color:#8a5a00;margin-bottom:1mm;">オレンジ＝ここに記載だが実際は他店舗で勤務中</div>';
+  }
+  html += '<div class="grid-hd"><div class="lbl"></div><div class="ticks" style="background:'+grad+'">'+printMakeTicks(gST,gEN)+'</div></div>';
+  html += '<div class="store-body">';
+  html += '<div class="zebra-bg" style="background:'+grad+'"></div>';
+  days.forEach(function(day, di){
+    var rows = printPackRows(ownStaff(day)).concat(printPackRows(refStaff(di)));
+    if (rows.length===0) rows.push([]);
+    var wc = day.wd==='土'?'sat':day.wd==='日'?'sun':'';
+    html += '<div class="day-row" style="flex:'+rowCountsPerDay[di]+' 1 0;">';
+    html += '<div class="day-lbl '+wc+'"><div>'+(day.date||'')+'</div><div class="wd">'+day.wd+'</div></div>';
+    html += '<div class="track-wrap">';
+    rows.forEach(function(row){
+      html += '<div class="track-row" style="flex:1 1 0;">';
+      row.forEach(function(s){
+        var breaks = (s.breaks||[]).slice().sort(function(a,b){return a.in-b.in;});
+        var segs = [], cur = s.in;
+        breaks.forEach(function(b){
+          if (b.in>cur) segs.push({in:cur,out:b.in,brk:false});
+          segs.push({in:b.in,out:b.out,brk:true});
+          cur=b.out;
+        });
+        if (cur<s.out) segs.push({in:cur,out:s.out,brk:false});
+        segs.forEach(function(seg){
+          var l=((seg.in-gST)/sp*100).toFixed(2), r=((gEN-seg.out)/sp*100).toFixed(2);
+          if (seg.brk){
+            html += '<div class="brk" style="left:'+l+'%;right:'+r+'%"></div>';
+          } else {
+            var col = s._ref ? '#ffa000' : empColor(s.n);
+            var segHours = seg.out - seg.in;
+            var fsz = segHours <= 1 ? 'font-size:9pt;' : '';
+            html += '<div class="bar" style="left:'+l+'%;right:'+r+'%;background:'+col+';'+fsz+'">'+s.n+'</div>';
+          }
+        });
+      });
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+function buildPrintHtml(weekLabel, hontenDays, hospitalDays){
+  var hontenHtml = printRenderStorePage('本店', hontenDays, 6, 23, weekLabel, hospitalDays);
+  var hospitalHtml = printRenderStorePage('病院店', hospitalDays, 7, 20, weekLabel, null);
+  return '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>シフト表印刷 - '+weekLabel+'</title><style>'
+    + '* { box-sizing: border-box; margin:0; padding:0; }'
+    + 'html, body { background:#eee; color:#222; font-family:"Hiragino Sans","Yu Gothic",-apple-system,sans-serif; }'
+    + '.toolbar { position: sticky; top:0; z-index:10; background:#222; color:#fff; padding:10px 16px; display:flex; align-items:center; gap:12px; font-size:13px; }'
+    + '.toolbar button { background:#4a7fd8; color:#fff; border:none; border-radius:5px; padding:7px 16px; font-size:13px; font-weight:600; cursor:pointer; }'
+    + '.toolbar button:hover { background:#3a6bc0; }'
+    + '.page-wrap { display:flex; flex-direction:column; align-items:center; padding:24px 0 60px; gap:14px; }'
+    + '.page { width:210mm; height:297mm; background:#fff; box-shadow:0 0 12px rgba(0,0,0,.2); padding:6mm 20mm; display:flex; flex-direction:column; overflow:hidden; }'
+    + '.page-hd { flex:0 0 auto; display:flex; align-items:baseline; gap:10px; margin-bottom:3mm; }'
+    + '.page-hd h1 { font-size:13pt; font-weight:700; color:#000; }'
+    + '.page-hd .sub { font-size:14pt; font-weight:700; color:#000; }'
+    + '.store-block { flex:1 1 auto; display:flex; flex-direction:column; min-height:0; }'
+    + '.store-ttl { flex:0 0 auto; font-size:11pt; font-weight:700; background:#222; color:#fff; display:inline-block; padding:2px 10px; border-radius:3px; margin-bottom:1.5mm; }'
+    + '.grid-hd { flex:0 0 auto; display:flex; margin-bottom:1mm; }'
+    + '.grid-hd .lbl { width:15mm; flex-shrink:0; }'
+    + '.grid-hd .ticks { flex:1; position:relative; height:5mm; }'
+    + '.grid-hd .ticks span { position:absolute; top:50%; transform:translate(-50%,-50%); font-size:8.5pt; font-weight:700; color:#333; }'
+    + '.store-body { flex:1 1 auto; min-height:0; position:relative; display:flex; flex-direction:column; gap:3mm; }'
+    + '.zebra-bg { position:absolute; top:0; bottom:0; left:15mm; right:0; z-index:0; }'
+    + '.day-row { position:relative; z-index:1; display:flex; align-items:stretch; min-height:0; border-bottom:1px solid #ccc; }'
+    + '.day-lbl { width:15mm; flex-shrink:0; display:flex; flex-direction:column; justify-content:center; align-items:flex-start; padding-left:0.5mm; font-size:9.5pt; line-height:1.25; background:#fff; }'
+    + '.day-lbl .wd { font-weight:700; font-size:11.5pt; }'
+    + '.day-lbl.sat .wd { color:#1a6abf; }'
+    + '.day-lbl.sun .wd { color:#bf1a1a; }'
+    + '.track-wrap { flex:1; min-height:0; display:flex; flex-direction:column; }'
+    + '.track-row { position:relative; min-height:0; }'
+    + '.bar, .brk, .store-ttl, .zebra-bg { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }'
+    + '.bar { position:absolute; top:0; bottom:0; border-radius:0; display:flex; align-items:center; justify-content:center; font-size:15pt; font-weight:700; color:#fff; overflow:hidden; white-space:nowrap; border:0.5px solid rgba(0,0,0,.25); }'
+    + '.brk { position:absolute; top:0; bottom:0; background:repeating-linear-gradient(45deg,#fff,#fff 3px,#a8dfa8 3px,#a8dfa8 6px); border:0.5px solid #7cc07c; }'
+    + '@media print { html { -webkit-print-color-adjust: exact; print-color-adjust: exact; } body { background:#fff; } .toolbar { display:none; } .page-wrap { padding:0; gap:0; } .page { box-shadow:none; margin:0; width:210mm; height:297mm; break-after:page; } .page:last-child { break-after:auto; } @page { size: A4 portrait; margin:0; } }'
+    + '</style></head><body>'
+    + '<div class="toolbar"><button onclick="window.print()">🖨 印刷 / PDF保存</button></div>'
+    + '<div class="page-wrap"><div class="page">'+hontenHtml+'</div><div class="page">'+hospitalHtml+'</div></div>'
+    + '</body></html>';
+}
+function openPrintWindow(weekLabel, hontenDays, hospitalDays){
+  var html = buildPrintHtml(weekLabel, hontenDays, hospitalDays);
+  var w = window.open('', '_blank');
+  if(!w){ alert('ポップアップがブロックされました。ブラウザのポップアップ許可設定をご確認ください。'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+function onPrintDraft(){
+  var draft = DRAFTS[curWeek];
+  if(!draft){ alert('この週はまだ下書きが作成されていません。'); return; }
+  var label = WEEKS_CREATE[curWeek] ? WEEKS_CREATE[curWeek].label : '';
+  openPrintWindow(label, draft.honten, draft.hospital);
+}
+function onPrintHistory(){
+  var entry = HISTORY_SHIFTS[curHistoryIdx];
+  if(!entry){ alert('公開履歴がありません。'); return; }
+  openPrintWindow(entry.label, entry.honten, entry.hospital);
+}
 
 function minSegs(store){ return store==='honten' ? MIN_SEG_HONTEN : MIN_SEG_HOSPITAL; }
 
