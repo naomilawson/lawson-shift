@@ -149,7 +149,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.33</h1>
+    <h1>シフト管理（管理者用） ver1.35</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -1914,7 +1914,6 @@ function printRenderStorePage(title, days, gST, gEN, weekLabel, refDays){
   if(refDays){
     html += '<div style="font-size:8pt;color:#8a5a00;margin-bottom:1mm;">オレンジ＝ここに記載だが実際は他店舗で勤務中</div>';
   }
-  html += '<div class="grid-hd"><div class="lbl"></div><div class="ticks" style="background:'+grad+'">'+printMakeTicks(gST,gEN)+'</div></div>';
   html += '<div class="store-body">';
   html += '<div class="zebra-bg" style="background:'+grad+'"></div>';
   days.forEach(function(day, di){
@@ -1923,6 +1922,8 @@ function printRenderStorePage(title, days, gST, gEN, weekLabel, refDays){
     var wc = day.wd==='土'?'sat':day.wd==='日'?'sun':'';
     html += '<div class="day-row" style="flex:'+rowCountsPerDay[di]+' 1 0;">';
     html += '<div class="day-lbl '+wc+'"><div>'+(day.date||'')+'</div><div class="wd">'+day.wd+'</div></div>';
+    html += '<div class="day-right">';
+    html += '<div class="day-ticks">'+printMakeTicks(gST,gEN)+'</div>';
     html += '<div class="track-wrap">';
     rows.forEach(function(row){
       html += '<div class="track-row" style="flex:1 1 0;">';
@@ -1949,7 +1950,7 @@ function printRenderStorePage(title, days, gST, gEN, weekLabel, refDays){
       });
       html += '</div>';
     });
-    html += '</div></div>';
+    html += '</div></div></div>';
   });
   html += '</div></div>';
   return html;
@@ -1970,10 +1971,6 @@ function buildPrintHtml(weekLabel, hontenDays, hospitalDays){
     + '.page-hd .sub { font-size:14pt; font-weight:700; color:#000; }'
     + '.store-block { flex:1 1 auto; display:flex; flex-direction:column; min-height:0; }'
     + '.store-ttl { flex:0 0 auto; font-size:11pt; font-weight:700; background:#222; color:#fff; display:inline-block; padding:2px 10px; border-radius:3px; margin-bottom:1.5mm; }'
-    + '.grid-hd { flex:0 0 auto; display:flex; margin-bottom:1mm; }'
-    + '.grid-hd .lbl { width:15mm; flex-shrink:0; }'
-    + '.grid-hd .ticks { flex:1; position:relative; height:5mm; }'
-    + '.grid-hd .ticks span { position:absolute; top:50%; transform:translate(-50%,-50%); font-size:8.5pt; font-weight:700; color:#333; }'
     + '.store-body { flex:1 1 auto; min-height:0; position:relative; display:flex; flex-direction:column; gap:3mm; }'
     + '.zebra-bg { position:absolute; top:0; bottom:0; left:15mm; right:0; z-index:0; }'
     + '.day-row { position:relative; z-index:1; display:flex; align-items:stretch; min-height:0; border-bottom:1px solid #ccc; }'
@@ -1981,6 +1978,9 @@ function buildPrintHtml(weekLabel, hontenDays, hospitalDays){
     + '.day-lbl .wd { font-weight:700; font-size:11.5pt; }'
     + '.day-lbl.sat .wd { color:#1a6abf; }'
     + '.day-lbl.sun .wd { color:#bf1a1a; }'
+    + '.day-right { flex:1; min-height:0; display:flex; flex-direction:column; }'
+    + '.day-ticks { flex:0 0 auto; position:relative; height:4.2mm; margin-bottom:0.3mm; }'
+    + '.day-ticks span { position:absolute; top:50%; transform:translate(-50%,-50%); font-size:8.5pt; font-weight:700; color:#555; }'
     + '.track-wrap { flex:1; min-height:0; display:flex; flex-direction:column; }'
     + '.track-row { position:relative; min-height:0; }'
     + '.bar, .brk, .store-ttl, .zebra-bg { -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }'
