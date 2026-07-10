@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="color-scheme" content="light">
-<title>シフト管理 ver1.45</title>
+<title>シフト管理 ver1.46</title>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
@@ -173,7 +173,7 @@ body.dk .s-me{background:#1e1e08;}
   <div class="hd">
     <div class="hd-l" id="hd-debug-switch" style="cursor:pointer;">
       <div class="av" id="hd-avatar">?</div>
-      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.45</div></div>
+      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.46</div></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <button id="refresh-btn" class="gear-btn" onclick="refreshAllData()"><span id="refresh-btn-icon">⟳</span> <span id="refresh-btn-label">更新</span></button>
@@ -702,7 +702,7 @@ function makeBar(s, gST, gEN, isBoth, prevCol) {
     var l = ((seg.in-gST)/sp*100).toFixed(1);
     var r = ((gEN-seg.out)/sp*100).toFixed(1);
     if (seg.brk) {
-      html += '<div style="position:absolute;top:0;bottom:0;left:'+l+'%;right:'+r+'%;background:#99FF99;pointer-events:none;"></div>';
+      html += '<div style="position:absolute;top:0;bottom:0;left:'+l+'%;right:'+r+'%;background:repeating-linear-gradient(45deg,#fff,#fff 3px,#a8dfa8 3px,#a8dfa8 6px);border:0.5px solid #7cc07c;pointer-events:none;"></div>';
     } else {
       var label = i === widestIdx ? s.n : '';
       html += '<div class="g-bar'+(s.me?' me':'')+'" style="left:'+l+'%;right:'+r+'%;background:'+col+'">'+label+'</div>';
@@ -738,9 +738,11 @@ function makeMyBar(day, gST, gEN) {
       var dur = s.out - s.in;
       var l = ((s.in-gST)/sp*100).toFixed(1);
       var r = ((gEN-s.out)/sp*100).toFixed(1);
-      var bg = s.brk ? '#99FF99' : '#2a9e52';
-      var col = s.brk ? '#0a5c2e' : '#fff';
-      html += '<div class="g-bar me" style="left:'+l+'%;right:'+r+'%;background:'+bg+';color:'+col+'">'+dur+'</div>';
+      if (s.brk) {
+        html += '<div class="g-bar me" style="left:'+l+'%;right:'+r+'%;background:repeating-linear-gradient(45deg,#fff,#fff 3px,#a8dfa8 3px,#a8dfa8 6px);border:0.5px solid #7cc07c;"></div>';
+      } else {
+        html += '<div class="g-bar me" style="left:'+l+'%;right:'+r+'%;background:#2a9e52;color:#fff">'+dur+'</div>';
+      }
     }
   }
   return html;
