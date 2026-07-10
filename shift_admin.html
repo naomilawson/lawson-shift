@@ -149,7 +149,7 @@ body{background:var(--bg);color:var(--t1);}
 </div>
 
   <div class="hd">
-    <h1>シフト管理（管理者用） ver1.35</h1>
+    <h1>シフト管理（管理者用） ver1.36</h1>
     <div style="display:flex;align-items:center;gap:10px;">
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="undoAction()" title="元に戻す">↶</button>
       <button style="width:34px;height:34px;border-radius:6px;border:1px solid var(--btn-bd);background:var(--btn);cursor:pointer;" onclick="redoAction()" title="やり直す">↷</button>
@@ -1227,7 +1227,7 @@ function renderGanttHtml(weekIdx, sub){
     if(rowsAll.length===0) rowsAll.push([]);
     for(var r=0;r<rowsAll.length;r++){
       var lbl = r===0 ? ('<div style="font-size:11px;font-weight:600;" class="'+wc+'">'+day.date+'</div><div style="font-size:14px;font-weight:700;" class="'+wc+'">'+day.wd+'</div>') : '';
-      html += '<div class="g-bar-row"><div class="g-row-lbl" style="flex-direction:column;'+(rowsAll.length===1?'justify-content:space-between;padding:2px 0;':'')+'">'+lbl+'</div><div class="g-track" style="cursor:copy;" onclick="onTrackClick(event,'+wkArg+',&quot;'+sub+'&quot;,'+di+')">';
+      html += '<div class="g-bar-row"><div class="g-row-lbl" style="flex-direction:column;'+(rowsAll.length===1?'justify-content:space-between;padding:2px 0;':'')+'">'+lbl+'</div><div class="g-track" style="cursor:copy;" onclick="onTrackClick(event,'+wkArg+',&quot;'+sub+'&quot;,'+di+')">'+bg;
       rowsAll[r].forEach(function(s){
         html += buildBarHtml(s, gST, sp, weekIdx, sub, di, s._idx, s._ref);
       });
@@ -1817,7 +1817,7 @@ function renderHistHtml(){
     if(rowsAll.length===0) rowsAll.push([]);
     rowsAll.forEach(function(row,r){
       var lbl = r===0 ? ('<div style="font-size:11px;font-weight:600;" class="'+wc+'">'+day.date+'</div><div style="font-size:14px;font-weight:700;" class="'+wc+'">'+day.wd+'</div>') : '';
-      html += '<div class="g-bar-row"><div class="g-row-lbl" style="flex-direction:column;'+(rowsAll.length===1?'justify-content:space-between;padding:2px 0;':'')+'">'+lbl+'</div><div class="g-track">';
+      html += '<div class="g-bar-row"><div class="g-row-lbl" style="flex-direction:column;'+(rowsAll.length===1?'justify-content:space-between;padding:2px 0;':'')+'">'+lbl+'</div><div class="g-track">'+bg;
       row.forEach(function(s){
         var breaks = (s.breaks||[]).slice().sort(function(a,b){return a.in-b.in;});
         var segs = [], cur = s.in;
