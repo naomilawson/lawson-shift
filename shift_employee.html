@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="color-scheme" content="light">
-<title>シフト管理 ver1.43</title>
+<title>シフト管理 ver1.45</title>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
@@ -173,7 +173,7 @@ body.dk .s-me{background:#1e1e08;}
   <div class="hd">
     <div class="hd-l" id="hd-debug-switch" style="cursor:pointer;">
       <div class="av" id="hd-avatar">?</div>
-      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.43</div></div>
+      <div><div class="nm" id="hd-name">読み込み中...</div><div class="st">シフト管理 ver1.45</div></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <button id="refresh-btn" class="gear-btn" onclick="refreshAllData()"><span id="refresh-btn-icon">⟳</span> <span id="refresh-btn-label">更新</span></button>
@@ -532,16 +532,16 @@ function swSchedWeek(i, el){
 function renderSchedTable(wi){
   var wk = WEEKS[wi];
   var names = EMPLOYEE_LIST.slice();
-  var h = '<tr><th class="dc">日付</th>';
-  for (var i = 0; i < names.length; i++) {
-    h += '<th' + (names[i] === MY_N ? ' class="s-me"' : '') + '>' + names[i] + '</th>';
-  }
-  h += '</tr>';
+  var h = '<tr><th class="dc">名前</th>';
   for (var di = 0; di < 7; di++) {
     var wc = WDS[di] === '土' ? 'style="color:#1a6abf"' : WDS[di] === '日' ? 'style="color:#bf1a1a"' : '';
-    h += '<tr><td class="dc" ' + wc + '>' + wk.days[di] + '<br><small>' + WDS[di] + '</small></td>';
-    for (var mi = 0; mi < names.length; mi++) {
-      var m = names[mi];
+    h += '<th ' + wc + '>' + wk.days[di] + '<br><small>' + WDS[di] + '</small></th>';
+  }
+  h += '</tr>';
+  for (var mi = 0; mi < names.length; mi++) {
+    var m = names[mi];
+    h += '<tr><td class="dc' + (m === MY_N ? ' s-me' : '') + '">' + m + '</td>';
+    for (var di = 0; di < 7; di++) {
       var rec = SCHED_DATA[wk.weekId] && SCHED_DATA[wk.weekId][m];
       var v = rec && rec.days ? schedDayToDisplay(rec.days[di]) : null;
       var cls = v===null ? 's-nodata' : v === '〇' ? 's-ok' : v === '×' ? 's-ng' : 's-tm';
@@ -933,10 +933,22 @@ function swTab(n, el) {
 }
 function openM() { document.getElementById('modal').classList.add('open'); renderReg(); }
 function closeM() { document.getElementById('modal').classList.remove('open'); }
+var DK_MODE_KEY = 'ciel_shift_dark_mode';
 function toggleDk(el) {
   document.body.classList.toggle('dk', el.checked);
   document.documentElement.style.colorScheme = el.checked ? 'dark' : 'light';
   document.documentElement.style.background = el.checked ? '#111116' : '#f5f5f2';
+  localStorage.setItem(DK_MODE_KEY, el.checked ? '1' : '0');
+}
+function applySavedDkMode(){
+  var saved = localStorage.getItem(DK_MODE_KEY);
+  if (saved === '1') {
+    var tog = document.getElementById('dk-tog');
+    if (tog) tog.checked = true;
+    document.body.classList.add('dk');
+    document.documentElement.style.colorScheme = 'dark';
+    document.documentElement.style.background = '#111116';
+  }
 }
 
 // システムダーク設定に追従
@@ -1087,6 +1099,7 @@ function initApp(){
   });
 })();
 
+applySavedDkMode();
 renderWish();
 initApp();
 </script>
